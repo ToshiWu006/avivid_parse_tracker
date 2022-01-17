@@ -1,7 +1,10 @@
 import time
 from logger import slackBot
+from functools import wraps
+import traceback
 
 def timing(func):
+    @wraps(func)
     def time_count(*args, **kwargs):
         t_start = time.time()
         values = func(*args, **kwargs)
@@ -13,11 +16,13 @@ def timing(func):
 ## log decorator with assign channel
 def logging_channels(channel_name_list):
     def logging(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except Exception as e:
-                message = f"error message: ```{e}```\ntrigger by function: ```{func.__name__}``` raise error in path: ```{func.__code__.co_filename}```\nPlase check"
+            except:
+                error = traceback.format_exc()
+                message = f"Error Message: ```{error}```\nTrigger By Function: ```{func.__name__}{args}``` Raise Error in Path: ```{func.__code__.co_filename}```\nPlase Check"
                 slackBot(channel_name_list).send_message(message)
                 print(message)
         return wrapper
@@ -26,11 +31,13 @@ def logging_channels(channel_name_list):
 
 ## log decorator
 def logging(func):
+    @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as e:
-            message = f"error message: ```{e}```\ntrigger by function: ```{func.__name__}``` raise error in path: ```{func.__code__.co_filename}```\nPlase check"
+        except:
+            error = traceback.format_exc()
+            message = f"error message: ```{error}```\ntrigger by function: ```{func.__name__}{args}``` raise error in path: ```{func.__code__.co_filename}```\nPlase check"
             slackBot("clare_test").send_message(message)
             print(message)
     return wrapper
@@ -41,4 +48,5 @@ def divide(x,y):
     return x/y
 
 if __name__ == "__main__":
+
     a = divide(10,0)

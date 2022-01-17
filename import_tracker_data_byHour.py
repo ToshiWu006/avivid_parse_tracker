@@ -8,7 +8,7 @@ import shutil
 @logging_channels(['clare_test'])
 @timing
 def collectLastHour():
-    date = datetime_to_str(datetime.datetime.utcnow(), pattern="%Y-%m-%d")
+    date = datetime_to_str(datetime.datetime.utcnow()-datetime.timedelta(hours=1), pattern="%Y-%m-%d")
     hour = datetime_to_str(datetime.datetime.utcnow()-datetime.timedelta(hours=1), pattern="%H")
     s3 = AmazonS3()
     data_list_filter = s3.dumpDateHourDataFilter(date, hour, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
@@ -60,11 +60,11 @@ if __name__ == "__main__":
 
 
 
-    # data_list_filter = collectLastHour()
+    data_list_filter = collectLastHour()
     # # delete_expired_folder()
 
     # file_list = get_a_day_file_list("2022-01-10")
 
-    data_list = get_data_by_date("2022-01-10")
+    # data_list = get_data_by_date("2022-01-10")
 
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": "removeCart"})
+    # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": "removeCart"})
