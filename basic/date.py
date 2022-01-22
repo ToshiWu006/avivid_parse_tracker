@@ -8,6 +8,8 @@ def to_datetime(date, pattern='%Y-%m-%d'):
         date = datetime.datetime.strptime(date, pattern)
     elif type(date) == datetime.date:
         date = datetime.datetime.strptime(datetime_to_str(date, pattern), pattern)
+    elif type(date) == datetime.datetime:
+        return date
     return date
 
 def get_yesterday(is_UTC0=False):
