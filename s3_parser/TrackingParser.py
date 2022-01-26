@@ -28,6 +28,68 @@ class TrackingParser:
     def __str__(self):
         return "TrackingParser"
 
+    ## load, leave, timeout, addCart, removeCart, purchase
+    @staticmethod
+    @logging_channels(['clare_test'])
+    def save_raw_event_table(data_list, date, hour):
+        event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase']
+        for event_type in event_type_list:
+            df = TrackingParser.build_raw_event_df(data_list, event_type, date, hour)
+            query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event')
+            MySqlHelper('RDS').ExecuteUpdate(query, df.to_dict('records'))
+            print(f'finish saving {event_type} into db')
+
+    @staticmethod
+    def build_raw_event_df(data_list, event_type, date, hour):
+        object_key = {'addCart':'cart', 'removeCart':'remove_cart', 'purchase':'purchase', 'load':'load'}
+        data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":event_type})
+
+        df = pd.DataFrame(data_list_filter)
+        df['date'], df['hour'] = [date]*df.shape[0], [hour]*df.shape[0]
+        if event_type in object_key.keys():
+            df.rename(columns={object_key[event_type]: 'event_value'}, inplace=True)
+            df['event_key'] = [event_type] * df.shape[0]
+        df.drop(columns=['behavior_type'], inplace=True)
+        df.dropna(inplace=True)
+        # df['event_key'] = [event_type] * df.shape[0]
+        # df['event_value'] = [json.dumps(row) for row in df['event_value']]
+        # df['event_key'] = [event_type] * df.shape[0]
+        if event_type=='load':
+            df['event_value'] = [json.dumps(row) for row in df['event_value']]
+        elif event_type=='leave' or event_type=='timeout':
+            df['event_value'] = ['_'] * df.shape[0]
+            df['record_user'] = [json.dumps(row) for row in df['record_user']]
+        else: ## addCart, removeCart, purchase
+            df['event_value'] = [json.dumps(row) for row in df['event_value']]
+            df['record_user'] = [json.dumps(row) for row in df['record_user']]
+
+        criteria_len = {'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16,
+                        'event_type': 16}
+        df = TrackingParser.clean_before_sql(df, criteria_len)
+        return df
+
+
+    @staticmethod
+    def clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16,
+                                           'event_type': 16}):
+        """
+
+        Parameters
+        ----------
+        df: DataFrame to enter sql table
+        criteria_len: convert to str and map(len) <= criteria
+
+        Returns
+        -------
+
+        """
+        cols = criteria_len.keys()
+        for col in cols:
+            df[col] = df[col].astype(str)
+            df = df[df[col].map(len) <= criteria_len[col]]
+        return df
+
+
     @logging_channels(['clare_test'])
     def get_df(self, event_type):
         data_list_filter = filterListofDictByDict(self.data_list, dict_criteria={"web_id": self.web_id, "event_type":event_type})
@@ -189,6 +251,29 @@ class TrackingParser:
         for i,event_type in enumerate(['purchase', 'addCart', 'removeCart']):
             dict_settings.update({event_type: settings[i*2:(i+1)*2]})
         return dict_settings
+
+    @staticmethod
+    def get_file_byHour(date_utc0, hour_utc0='00'):
+        """
+
+        Parameters
+        ----------
+        date_utc0: with format, str:'2022-01-01' or str:'2022/01/01'
+        hour_utc0: with format, str:'00'-'23' or int:0-23
+
+        Returns: data_list
+        -------
+
+        """
+        if type(date_utc0)==datetime.datetime:
+            date_utc0 = datetime.datetime.strftime(date_utc0, '%Y-%m-%d')
+        if type(hour_utc0)==int:
+            hour_utc0 = f"{hour_utc0:02}"
+        path = os.path.join(ROOT_DIR, "s3data", date_utc0.replace('-', '/'), hour_utc0, "rawData.pickle")
+        if os.path.isfile(path):
+            with open(path, 'rb') as f:
+                data_list = pickle.load(f)
+        return data_list
 
     @staticmethod
     def get_data_by_daterange(date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
