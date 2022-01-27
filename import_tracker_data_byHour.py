@@ -26,11 +26,13 @@ def collectYesterday():
 
 ## store 30days
 @logging_channels(['clare_test'])
-def delete_expired_folder():
-    root_folder = datetime_to_str(datetime.datetime.utcnow()-datetime.timedelta(days=30), pattern="%Y/%m/%d")
+def delete_expired_folder(n_day=30):
+    root_folder = datetime_to_str(datetime.datetime.utcnow()-datetime.timedelta(days=n_day), pattern="%Y/%m/%d")
     path_folder = os.path.join(ROOT_DIR, "s3data", root_folder)
     if os.path.exists(path_folder):
         shutil.rmtree(path_folder)
+        print(f"remove folder at {path_folder}")
+
     else:
         print("folder does not exist")
 
@@ -73,11 +75,14 @@ if __name__ == "__main__":
     ## load data from s3
     data_list_filter, datetime_lastHour = collectLastHour()
 
-    ## save to db
-    datetime_utc8 = datetime_lastHour+datetime.timedelta(hours=8)
-    date_utc8 = datetime.datetime.strftime(datetime_utc8, '%Y/%m/%d')
-    hour_utc8 = datetime.datetime.strftime(datetime_utc8, '%H')
-    TrackingParser.save_raw_event_table(data_list_filter, date_utc8, hour_utc8)
+    ## save collection to s3 every hour
+    AmazonS3('elephants3').upload_tracker_data(datetime_utc0=datetime_lastHour)
 
-    # data_list = TrackingParser.get_file_byHour('2022-01-23', 0)
-    # delete_expired_folder()
+    ## save to db
+    # datetime_utc8 = datetime_lastHour+datetime.timedelta(hours=8)
+    # date_utc8 = datetime.datetime.strftime(datetime_utc8, '%Y/%m/%d')
+    # hour_utc8 = datetime.datetime.strftime(datetime_utc8, '%H')
+    # TrackingParser.save_raw_event_table(data_list_filter, date_utc8, hour_utc8)
+
+    ## delete folder at today_utc0-n
+    delete_expired_folder(30)

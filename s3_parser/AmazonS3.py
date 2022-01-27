@@ -1,9 +1,10 @@
-import boto3, json, os
-from definitions import ROOT_DIR
-from basic import datetime_to_str, get_today, filterListofDict, filterListofDictByList, filterListofDictByDict, timing, to_datetime
+import boto3, json, os, logging
+from botocore.exceptions import ClientError
 import datetime
 import pickle
 from pathlib import Path
+from definitions import ROOT_DIR
+from basic import datetime_to_str, logging_channels, filterListofDict, filterListofDictByList, filterListofDictByDict, timing, to_datetime
 
 class AmazonS3 :
     def __init__(self, bucket_name='elephants3', settings_filename='s3_settings.json'):
@@ -149,24 +150,67 @@ class AmazonS3 :
             settings = json.load(settings_file)
             return settings
 
+    @logging_channels(['clare_test'])
+    @timing
+    def upload_tracker_data(self, datetime_utc0, s3_ROOT_DIR='tracker'):
+        if type(datetime_utc0) == str:
+            datetime_utc0 = datetime.datetime.strptime(datetime_utc0, "%Y-%m-%d %H:%M:%S")
+        MID_DIR = datetime.datetime.strftime(datetime_utc0, format="%Y/%m/%d/%H")
+        file_name = os.path.join(ROOT_DIR, "s3data", MID_DIR, "rawData.pickle") ## path in local
+        object_name = os.path.join(s3_ROOT_DIR, MID_DIR, 'rawData.pickle') ## path in s3
+        print(f"upload file from {file_name} to s3 {object_name}")
+        self._upload_file(file_name, object_name)
+
+
+    def _upload_file(self, file_name, object_name=None):
+        """Upload a file to an S3 bucket
+
+        :param file_name: File to upload
+        :param bucket: Bucket to upload to
+        :param object_name: S3 object name. If not specified then file_name is used
+        :return: True if file was uploaded, else False
+        """
+
+        # If S3 object_name was not specified, use file_name
+        if object_name is None:
+            object_name = os.path.basename(file_name)
+
+        # Upload the file
+        s3_client = boto3.client('s3', aws_access_key_id=self.settings["access_key"],
+                                  aws_secret_access_key=self.settings["access_secret"],
+                                  region_name=self.settings["region_name"])
+        try:
+            response = s3_client.upload_file(file_name, self.bucket_name, object_name)
+        except ClientError as e:
+            logging.error(e)
+            return False
+        return True
+
 ## unit test
 if __name__ == "__main__":
+
+
+    ## test for uploading
+    # AmazonS3('elephants3')._upload_file('/home/clare/Desktop/parse_tracker/s3data/click_count_total.png', 'tracker')
+    # path = '/home/clare/Desktop/parse_tracker/s3data/2022/01/27/00/rawData.pickle'
+    AmazonS3('elephants3').upload_tracker_data(datetime_utc0='2022-01-27 01:00:00')
+
+
 
     # with open('data_list.pickle', 'wb') as f:
     #     pickle.dump(data_list, f)
 
 
-
-    with open('data_list.pickle', 'rb') as f:
-        data_list = pickle.load(f)
-
-    key_filter = 'event_type'
-    values_filter = 'load'
-    data_list_filter = filterListofDict(data_list, key='event_type', value='load')
-    data_list_filter2 = filterListofDict(data_list_filter, key='web_id', value='nineyi11')
-    data_list_filter3 = filterListofDictByList(data_list_filter, key_list=['web_id'], value_list=['nineyi11'])
-    data_list_filter4 = filterListofDictByDict(data_list, dict_criteria={'event_type': 'load','web_id': 'nineyi11'})
-    data_list_filter5 = filterListofDictByDict(data_list, dict_criteria={'event_type': None,'web_id': None})
+    # with open('data_list.pickle', 'rb') as f:
+    #     data_list = pickle.load(f)
+    #
+    # key_filter = 'event_type'
+    # values_filter = 'load'
+    # data_list_filter = filterListofDict(data_list, key='event_type', value='load')
+    # data_list_filter2 = filterListofDict(data_list_filter, key='web_id', value='nineyi11')
+    # data_list_filter3 = filterListofDictByList(data_list_filter, key_list=['web_id'], value_list=['nineyi11'])
+    # data_list_filter4 = filterListofDictByDict(data_list, dict_criteria={'event_type': 'load','web_id': 'nineyi11'})
+    # data_list_filter5 = filterListofDictByDict(data_list, dict_criteria={'event_type': None,'web_id': None})
 
 
 
