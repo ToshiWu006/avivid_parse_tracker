@@ -8,12 +8,16 @@ from sklearn.linear_model import LogisticRegression
 import matplotlib.pyplot as plt
 
 class TrackingParser:
-    def __init__(self, web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
+    def __init__(self, web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11', use_db=True):
         self.web_id = web_id
+        self.use_db = use_db
         self.event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase']
         self.dict_object_key = {'addCart':'cart', 'removeCart':'remove_cart', 'purchase':'purchase'}
         self.dict_settings = self.fetch_parse_key_settings(web_id)
-        self.data_list = self.get_data_by_daterange(date_utc8_start, date_utc8_end)
+        if use_db:
+            self.data_list = self.fetch_six_events_data_by_daterange(web_id, date_utc8_start, date_utc8_end)
+        else: ## use local storage
+            self.data_list = self.get_data_by_daterange(date_utc8_start, date_utc8_end)
         # self.data_list_filter = filterListofDictByDict(self.data_list, dict_criteria={"web_id": web_id})  # "web_id":"nineyi11"
         self.df_loaded = self.get_df('load')
         self.df_leaved = self.get_df('leave')
@@ -33,11 +37,26 @@ class TrackingParser:
     @logging_channels(['clare_test'])
     def save_raw_event_table(data_list, date, hour):
         event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase']
+        df_list = []
         for event_type in event_type_list:
             df = TrackingParser.build_raw_event_df(data_list, event_type, date, hour)
-            query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event')
-            MySqlHelper('RDS').ExecuteUpdate(query, df.to_dict('records'))
-            print(f'finish saving {event_type} into db')
+            ## drop duplicate using unique key in table
+            df.drop_duplicates(subset=['web_id','event_type','timestamp','uuid'], inplace=True)
+            # if event_type == 'addCart' or :
+
+
+            if event_type=='load': ## bigger than others
+                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_load', SQL_ACTION="INSERT INTO")
+            elif event_type=='leave': ## 2nd large
+                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_leave', SQL_ACTION="INSERT INTO")
+            elif event_type=='purchase': ## more important
+                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_purchase', SQL_ACTION="INSERT INTO")
+            else: ## addCart, removeCart, timeout
+                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event', SQL_ACTION="INSERT INTO")
+            MySqlHelper('tracker').ExecuteUpdate(query, df.to_dict('records'))
+            print(f'finish saving {event_type} into db at {date} {hour}:00:00')
+            df_list += [df]
+        return df_list
 
     @staticmethod
     def build_raw_event_df(data_list, event_type, date, hour):
@@ -49,7 +68,8 @@ class TrackingParser:
         if event_type in object_key.keys():
             df.rename(columns={object_key[event_type]: 'event_value'}, inplace=True)
             df['event_key'] = [event_type] * df.shape[0]
-        df.drop(columns=['behavior_type'], inplace=True)
+        if 'behavior_type' in df.columns:
+            df.drop(columns=['behavior_type'], inplace=True)
         df.dropna(inplace=True)
         # df['event_key'] = [event_type] * df.shape[0]
         # df['event_value'] = [json.dumps(row) for row in df['event_value']]
@@ -58,10 +78,17 @@ class TrackingParser:
             df['event_value'] = [json.dumps(row) for row in df['event_value']]
         elif event_type=='leave' or event_type=='timeout':
             df['event_value'] = ['_'] * df.shape[0]
-            df['record_user'] = [json.dumps(row) for row in df['record_user']]
+            if 'record_user' in df.columns:
+                df['record_user'] = [json.dumps(row) for row in df['record_user']]
+            else:
+                df['record_user'] = ['_'] * df.shape[0]
         else: ## addCart, removeCart, purchase
             df['event_value'] = [json.dumps(row) for row in df['event_value']]
-            df['record_user'] = [json.dumps(row) for row in df['record_user']]
+            if 'record_user' in df.columns:
+                df['record_user'] = [json.dumps(row) for row in df['record_user']]
+            else:
+                df['record_user'] = ['_'] * df.shape[0]
+            # df['record_user'] = [json.dumps(row) for row in df['record_user']]
 
         criteria_len = {'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16,
                         'event_type': 16}
@@ -85,10 +112,10 @@ class TrackingParser:
         """
         cols = criteria_len.keys()
         for col in cols:
-            df[col] = df[col].astype(str)
-            df = df[df[col].map(len) <= criteria_len[col]]
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+                df = df[df[col].map(len) <= criteria_len[col]]
         return df
-
 
     @logging_channels(['clare_test'])
     def get_df(self, event_type):
@@ -96,24 +123,24 @@ class TrackingParser:
         dict_list = []
         if event_type=='load':
             for data_dict in data_list_filter:
-                dict_list += self.fully_parse_loaded(data_dict)
+                dict_list += self.fully_parse_loaded(data_dict, self.use_db)
         elif event_type=='leave' or event_type=='timeout':
             for data_dict in data_list_filter:
                 dict_list += self.fully_parse_leaved_timeout(data_dict)
         ## addCart, removeCart, purchase
         else:
             for data_dict in data_list_filter:
-                dict_list += self.fully_parse_object(data_dict, event_type)
+                dict_list += self.fully_parse_object(data_dict, event_type, self.use_db)
         df = pd.DataFrame(dict_list)
         return df
 
     ## addCart,removeCart,purchased events
-    def fully_parse_object(self, data_dict, event_type):
+    def fully_parse_object(self, data_dict, event_type, use_db):
         object_key = self.dict_object_key[event_type]
         key_join_list, key_rename_list = self.dict_settings[event_type]
         universial_dict = self.parse_rename_universial(data_dict)
         record_dict = self.parse_rename_record_user(data_dict)
-        object_dict_list = self.parse_rename_object(data_dict, key_join_list, key_rename_list, object_key=object_key)
+        object_dict_list = self.parse_rename_object(data_dict, key_join_list, key_rename_list, object_key, use_db)
         result_dict_list = []
         for object_dict in object_dict_list:
             object_dict.update(universial_dict)
@@ -123,7 +150,7 @@ class TrackingParser:
 
     ## loaded event
     @staticmethod
-    def fully_parse_loaded(data_dict):
+    def fully_parse_loaded(data_dict, use_db):
         universial_dict = TrackingParser.parse_rename_universial(data_dict)
         key_list = ['dv', 'ul', 'un', 'm_t', 'i_l', 'ps', 't_p_t', 's_id', 's_idl', 'l_c',
                     'c_c_t', 'mt_nm', 'mt_ns', 'mt_nc', 'mt_nd', 'mps', 'mt_p', 'mt_p_t', 'ms_d']
@@ -131,7 +158,10 @@ class TrackingParser:
                            'pageviews', 'time_pageview_total', 'session_id', 'session_id_last', 'landing_count',
                            'click_count_total', 'max_time_no_move', 'max_time_no_scroll', 'max_time_no_click', 'max_time_no_scroll_depth',
                            'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth']
-        object_dict = data_dict['load']
+        if use_db:
+            object_dict = json.loads(data_dict['event_value'])
+        else:
+            object_dict = data_dict['load']
         loaded_dict = {}
         for key, key_rename in zip(key_list, key_rename_list):
             if key not in object_dict.keys():
@@ -154,12 +184,17 @@ class TrackingParser:
         key_list = ['web_id', 'uuid', 'ga_id', 'fb_id', 'timestamp']
         universial_dict = {}
         for key in key_list:
-            universial_dict.update({key: data_dict[key]})
+            if key in data_dict.keys():
+                universial_dict.update({key: data_dict[key]})
+            else:
+                universial_dict.update({key: '_'})
         return universial_dict
 
     @staticmethod
     def parse_rename_record_user(data_dict):
         record_user_dict = data_dict['record_user']
+        if type(record_user_dict)==str:
+            record_user_dict = json.loads(record_user_dict)
         key_list = ['dv', 'ul', 'un', 'm_t', 's_h',
                     'w_ih', 't_p', 's_d', 's_d_', 'c_c',
                     'c_c_t', 't_nm', 't_ns', 't_nc', 'mt_nm',
@@ -190,8 +225,11 @@ class TrackingParser:
 
     ## main for parse and rename 'addcart', 'removeCart', 'purchase' event
     @staticmethod
-    def parse_rename_object(data_dict, key_join_list, key_rename_list, object_key='purchase'):
-        collection_dict, dict_object = {}, json.loads(data_dict[object_key])
+    def parse_rename_object(data_dict, key_join_list, key_rename_list, object_key='purchase', use_db=True):
+        if use_db:
+            collection_dict, dict_object = {}, json.loads(json.loads(data_dict['event_value']))
+        else:
+            collection_dict, dict_object = {}, json.loads(data_dict[object_key])
         value_list = []
         n_list = 0
         ## parse dict type key and store list type key
@@ -252,6 +290,56 @@ class TrackingParser:
             dict_settings.update({event_type: settings[i*2:(i+1)*2]})
         return dict_settings
 
+    ################################# get data using sql #################################
+    @staticmethod
+    def generate_sql_query_raw_event(web_id, table='raw_event', date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
+        columns = ['uuid', 'timestamp', 'event_type', 'coupon', 'record_user', 'event_key', 'event_value', 'date', 'hour']
+        query = f"""
+        SELECT 
+            {','.join(columns)}
+        FROM
+            {table}
+        WHERE
+            web_id = '{web_id}' AND 
+            date BETWEEN '{date_utc8_start}' AND '{date_utc8_end}'
+        """
+        return query, columns
+
+    @staticmethod
+    @timing
+    def fetch_six_events_data_by_daterange(web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
+        table_list = ['raw_event_load', 'raw_event_purchase', 'raw_event']
+        data_list = []
+        for table in table_list:
+            query, columns = TrackingParser.generate_sql_query_raw_event(web_id, table, date_utc8_start, date_utc8_end)
+            data_list += MySqlHelper("tracker").ExecuteSelect(query)
+        df = pd.DataFrame(data_list, columns=columns)
+        df['web_id'] = [web_id]*df.shape[0]
+        return df.to_dict('records')
+
+    ################################# get data using local storage #################################
+    @staticmethod
+    def get_file_byDatetime(datetime_utc0):
+        """
+
+        Parameters
+        ----------
+        datetime_utc0: with format, str:'2022-01-01 10:00:00' or datetime.datetime: 2022-01-01 10:00:00
+
+        Returns: data_list
+        -------
+
+        """
+        ## convert to datetime.datetime
+        if type(datetime_utc0)==str:
+            datetime_utc0 = datetime.datetime.strptime(datetime_utc0, "%Y-%m-%d %H:%M:%S")
+        MID_DIR = datetime.datetime.strftime(datetime_utc0, format="%Y/%m/%d/%H")
+        path = os.path.join(ROOT_DIR, "s3data", MID_DIR, "rawData.pickle")
+        if os.path.isfile(path):
+            with open(path, 'rb') as f:
+                data_list = pickle.load(f)
+        return data_list
+
     @staticmethod
     def get_file_byHour(date_utc0, hour_utc0='00'):
         """
@@ -305,6 +393,9 @@ class TrackingParser:
             os.path.join(ROOT_DIR, "s3data", datetime_to_str(root_folder, pattern="%Y/%m/%d/%H"), "rawData.pickle") for
             root_folder in datetime_list]
         return file_list
+################################# get data using local storage #################################
+
+
 
 @timing
 def fetch_91app_web_id():
@@ -421,109 +512,112 @@ def append_purchased_column(df, uuid_purchased):
 
 
 if __name__ == "__main__":
-    web_id = "nineyi11"
+    web_id = "nineyi1105"
     date_utc8_start = "2022-01-19"
     date_utc8_end = "2022-01-19"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     df_loaded = tracking.df_loaded
     df_purchased = tracking.df_purchased
 
-    uuid_load = list(set(df_loaded['uuid']))
-    uuid_purchased = list(set(df_purchased['uuid']))
-    session_purchased = {row['uuid']:[row['session_id_last'],row['session_id']] for i,row in df_purchased.iterrows()}
-    dict_collect_list = []
-    keys_collect = ['uuid', 'device', 'pageviews', 'time_pageview_total', 'landing_count',
-                    'click_count_total', 'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth']
+    # web_id = "94monster"
+    # df = TrackingParser.fetch_six_events_data_by_daterange(web_id, date_utc8_start='2022-01-18', date_utc8_end='2022-01-18')
 
-    df_loaded_purchased = df_loaded.query(f"uuid in {uuid_purchased}").sort_values(by=['uuid', 'timestamp'])
-    # keys_collect = ['uuid', 'max_pageviews', 'max_time_pageview_total', 'click_count_total']
-    # for i,uuid in enumerate(uuid_load):
-    #     dict_collect = {}
-    #     df_query = df_loaded.query(f"uuid=='{uuid}'").iloc[-1]
-    #     for key in keys_collect:
-    #         vlaue = df_query[key]
-    #         dict_collect.update({key: vlaue})
-    #         if key=='uuid':
-    #             if vlaue in uuid_purchased:
-    #                 dict_append = {'is_purchased': 1}
-    #             else:
-    #                 dict_append = {'is_purchased': 0}
-    #             dict_collect.update(dict_append)
+    # uuid_load = list(set(df_loaded['uuid']))
+    # uuid_purchased = list(set(df_purchased['uuid']))
+    # session_purchased = {row['uuid']:[row['session_id_last'],row['session_id']] for i,row in df_purchased.iterrows()}
+    # dict_collect_list = []
+    # keys_collect = ['uuid', 'device', 'pageviews', 'time_pageview_total', 'landing_count',
+    #                 'click_count_total', 'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth']
     #
-    #     dict_collect_list += [dict_collect]
-    #     if i%100==0:
-    #         print(f"finish {i}")
-    # df_collect = pd.DataFrame(dict_collect_list)
-    df_collect = append_purchased_column(df_loaded, uuid_purchased)[keys_collect+['is_purchased']]
-
-
-    from sklearn.decomposition import PCA
-    # data_purchased = normalize_data(np.array(df_collect.query(f"is_purchased==1"))[:,2:])
-    data_purchased = np.array(df_collect.query(f"is_purchased==1"))[:,2:]
-
-    pca = PCA(n_components=2)
-    result = pca.fit(data_purchased)
-    transform_purchased = result.transform(data_purchased)
-
-    # data_not_purchased = normalize_data(np.array(df_collect.query(f"is_purchased==0"))[:,2:])
-    data_not_purchased = np.array(df_collect.query(f"is_purchased==0"))[:,2:]
-
-    pca = PCA(n_components=2)
-    result = pca.fit(data_not_purchased)
-    transform_not_purchased = result.transform(data_not_purchased)
-    plt.figure()
-    plt.plot(transform_not_purchased[:,0], transform_not_purchased[:,1], 'bo')
-    plt.plot(transform_purchased[:,0], transform_purchased[:,1], 'ro')
-    plt.show()
-
-
-
-    data = normalize_data(np.array(df_collect)[:,6:])
-    label = np.array(df_collect)[:,1]
-    pca = PCA(n_components=2)
-    result = pca.fit(data)
-    transform_data = result.transform(data)
-
-    plt.figure()
-    plt.plot(transform_data[label==0,0], transform_data[label==0,1], 'bo')
-    plt.plot(transform_data[label==1,0], transform_data[label==1,1], 'r*')
-    plt.show()
-
-
-    ## clustering
-    from sklearn.mixture import GaussianMixture
-    data = np.array(df_collect)[:,6:]
-    data_nor = normalize_data(data)
-    label = np.array(df_collect)[:,1]
-    pca = PCA(n_components=2)
-    result = pca.fit(data_nor)
-    transform_data = result.transform(data_nor)
-
-    gmm = GaussianMixture(n_components=2, tol=1e-5, init_params='random')
-    # model = Birch(threshold=0.05, n_clusters=5)
-    ##  fit the model
-    gmm.fit(transform_data)
-    ## assign a cluster to each example
-    label = gmm.predict(transform_data)
-    plt.figure()
-    data_passive, data_active = [], []
-    for i, (row,l) in enumerate(zip(transform_data,label)):
-        if row[1]>0 and row[0]>0: ## class 1
-            plt.plot(row[0], row[1], 'r*')
-            data_passive += [data[i]]
-        else:
-            plt.plot(row[0], row[1], 'bo')
-            data_active += [data[i]]
-    plt.show()
-    data_passive, data_active = np.array(data_passive).astype(int), np.array(data_active).astype(int)
-
-    plt.figure()
-    for i, (row,l) in enumerate(zip(transform_data,label)):
-        if l==1: ## class 1
-            plt.plot(row[0], row[1], 'r*')
-        else:
-            plt.plot(row[0], row[1], 'bo')
-    plt.show()
+    # df_loaded_purchased = df_loaded.query(f"uuid in {uuid_purchased}").sort_values(by=['uuid', 'timestamp'])
+    # # keys_collect = ['uuid', 'max_pageviews', 'max_time_pageview_total', 'click_count_total']
+    # # for i,uuid in enumerate(uuid_load):
+    # #     dict_collect = {}
+    # #     df_query = df_loaded.query(f"uuid=='{uuid}'").iloc[-1]
+    # #     for key in keys_collect:
+    # #         vlaue = df_query[key]
+    # #         dict_collect.update({key: vlaue})
+    # #         if key=='uuid':
+    # #             if vlaue in uuid_purchased:
+    # #                 dict_append = {'is_purchased': 1}
+    # #             else:
+    # #                 dict_append = {'is_purchased': 0}
+    # #             dict_collect.update(dict_append)
+    # #
+    # #     dict_collect_list += [dict_collect]
+    # #     if i%100==0:
+    # #         print(f"finish {i}")
+    # # df_collect = pd.DataFrame(dict_collect_list)
+    # df_collect = append_purchased_column(df_loaded, uuid_purchased)[keys_collect+['is_purchased']]
+    #
+    #
+    # from sklearn.decomposition import PCA
+    # # data_purchased = normalize_data(np.array(df_collect.query(f"is_purchased==1"))[:,2:])
+    # data_purchased = np.array(df_collect.query(f"is_purchased==1"))[:,2:]
+    #
+    # pca = PCA(n_components=2)
+    # result = pca.fit(data_purchased)
+    # transform_purchased = result.transform(data_purchased)
+    #
+    # # data_not_purchased = normalize_data(np.array(df_collect.query(f"is_purchased==0"))[:,2:])
+    # data_not_purchased = np.array(df_collect.query(f"is_purchased==0"))[:,2:]
+    #
+    # pca = PCA(n_components=2)
+    # result = pca.fit(data_not_purchased)
+    # transform_not_purchased = result.transform(data_not_purchased)
+    # plt.figure()
+    # plt.plot(transform_not_purchased[:,0], transform_not_purchased[:,1], 'bo')
+    # plt.plot(transform_purchased[:,0], transform_purchased[:,1], 'ro')
+    # plt.show()
+    #
+    #
+    #
+    # data = normalize_data(np.array(df_collect)[:,6:])
+    # label = np.array(df_collect)[:,1]
+    # pca = PCA(n_components=2)
+    # result = pca.fit(data)
+    # transform_data = result.transform(data)
+    #
+    # plt.figure()
+    # plt.plot(transform_data[label==0,0], transform_data[label==0,1], 'bo')
+    # plt.plot(transform_data[label==1,0], transform_data[label==1,1], 'r*')
+    # plt.show()
+    #
+    #
+    # ## clustering
+    # from sklearn.mixture import GaussianMixture
+    # data = np.array(df_collect)[:,6:]
+    # data_nor = normalize_data(data)
+    # label = np.array(df_collect)[:,1]
+    # pca = PCA(n_components=2)
+    # result = pca.fit(data_nor)
+    # transform_data = result.transform(data_nor)
+    #
+    # gmm = GaussianMixture(n_components=2, tol=1e-5, init_params='random')
+    # # model = Birch(threshold=0.05, n_clusters=5)
+    # ##  fit the model
+    # gmm.fit(transform_data)
+    # ## assign a cluster to each example
+    # label = gmm.predict(transform_data)
+    # plt.figure()
+    # data_passive, data_active = [], []
+    # for i, (row,l) in enumerate(zip(transform_data,label)):
+    #     if row[1]>0 and row[0]>0: ## class 1
+    #         plt.plot(row[0], row[1], 'r*')
+    #         data_passive += [data[i]]
+    #     else:
+    #         plt.plot(row[0], row[1], 'bo')
+    #         data_active += [data[i]]
+    # plt.show()
+    # data_passive, data_active = np.array(data_passive).astype(int), np.array(data_active).astype(int)
+    #
+    # plt.figure()
+    # for i, (row,l) in enumerate(zip(transform_data,label)):
+    #     if l==1: ## class 1
+    #         plt.plot(row[0], row[1], 'r*')
+    #     else:
+    #         plt.plot(row[0], row[1], 'bo')
+    # plt.show()
 
 
 

@@ -1,5 +1,6 @@
 from db.mysqlconnector import MysqlConnector
 from db.logger import Logger
+from basic import logging_channels
 from sqlalchemy import create_engine, Table, MetaData, insert
 from sqlalchemy import Column, Integer, String, DATETIME
 import pandas as pd
@@ -31,6 +32,7 @@ class MySqlHelper:
             self.sql_connector.get_session().close()
         return count
 
+    @logging_channels(['clare_test'])
     def ExecuteUpdate(self, *entities, **kwargs):
         '''
             输入非查詢SQL語句
