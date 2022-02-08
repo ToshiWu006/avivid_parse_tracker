@@ -1,9 +1,7 @@
-from s3_parser import AmazonS3, TrackingParser
-from basic import datetime_to_str, timing, logging_channels, datetime_range, filterListofDictByDict, filterListofDictByDictFuzzy
-from definitions import ROOT_DIR
+from s3_parser import TrackingParser
+from basic import datetime_to_str, timing, logging_channels
 from db import MySqlHelper
-import datetime, os, pickle, json
-import shutil
+import datetime
 import pandas as pd
 
 @logging_channels(['clare_test'])
@@ -29,7 +27,7 @@ def fetch_enable_analysis_web_id():
     query = f"""SELECT web_id
                         FROM cdp_tracking_settings where enable_analysis=1"""
     print(query)
-    data = MySqlHelper("rheacache-db0").ExecuteSelect(query)
+    data = MySqlHelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
     web_id_list = [d[0] for d in data]
     return web_id_list
 
@@ -38,24 +36,8 @@ if __name__ == "__main__":
 
     date_utc8 = datetime_to_str((datetime.datetime.utcnow()+datetime.timedelta(hours=8)-datetime.timedelta(days=1)).date())
     web_id_all = fetch_enable_analysis_web_id()
-    # web_id_all = ['i3fresh']
+    # web_id_all = ['lovingfamily']
     for web_id in web_id_all:
         tracking = TrackingParser(web_id, date_utc8, date_utc8)
-        # tracking = TrackingParser(web_id, '2022-02-01', '2022-02-06')
+        # tracking = TrackingParser(web_id, '2022-02-01', '2022-02-07')
         save_six_clean_events(tracking)
-
-
-    ## check web_id numbers
-    # data_filter = filterListofDictByDictFuzzy(tracking.data_list, {'web_id':'lovingfamily', 'event_type':'addCart'})
-    # web_id_all = set([data['web_id'] for data in data_filter])
-
-    # tracking_i3 = TrackingParser('i3fresh', '2022-02-07', '2022-02-07')
-    # data_filter = filterListofDictByDictFuzzy(tracking_i3.data_list, {'web_id':'i3fresh', 'event_type':'purchase'})
-    #
-    #
-    # a = data_filter[0]['purchase']
-    # b = json.loads(a)
-    # c = json.loads(b['bitem'])
-# actionField.id,actionField.revenue,actionField.shipping,products.id,products.name,products.price,products.quantity,products.category,products.variant,actionField.coupon,products.empty
-# order_id,total_price,shipping_price,product_id,product_name,product_price,product_quantity,product_category,product_variant,coupon,currency
-

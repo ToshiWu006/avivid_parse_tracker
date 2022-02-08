@@ -93,6 +93,7 @@ class TrackingParser:
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
         df.drop_duplicates(subset=self._get_unique_col(event_type), inplace=True)
+        df.dropna(inplace=True)
         df = self.clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16})
         return df
 
