@@ -110,3 +110,7 @@ def date_to_timestamp(date):
 def timestamp_to_date(ts):
     date = datetime.datetime.utcfromtimestamp(ts)
     return date
+
+## unit test
+if __name__ == "__main__":
+    date = timestamp_to_date(1642521611326/1000)

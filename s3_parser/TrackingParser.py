@@ -1,3 +1,5 @@
+import math
+
 from basic import datetime_to_str, timing, logging_channels, datetime_range, filterListofDictByDict, to_datetime
 from definitions import ROOT_DIR
 from db import MySqlHelper
@@ -8,93 +10,119 @@ from sklearn.linear_model import LogisticRegression
 import matplotlib.pyplot as plt
 
 class TrackingParser:
-    def __init__(self, web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11', use_db=True):
+    def __init__(self, web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
         self.web_id = web_id
-        self.use_db = use_db
         self.event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase']
         self.dict_object_key = {'addCart':'cart', 'removeCart':'remove_cart', 'purchase':'purchase'}
         self.dict_settings = self.fetch_parse_key_settings(web_id)
-        if use_db:
-            self.data_list = self.fetch_six_events_data_by_daterange(web_id, date_utc8_start, date_utc8_end)
-        else: ## use local storage
-            self.data_list = self.get_data_by_daterange(date_utc8_start, date_utc8_end)
-        # self.data_list_filter = filterListofDictByDict(self.data_list, dict_criteria={"web_id": web_id})  # "web_id":"nineyi11"
+        self.data_list = self.get_data_by_daterange(date_utc8_start, date_utc8_end)
+
         self.df_loaded = self.get_df('load')
         self.df_leaved = self.get_df('leave')
         self.df_timeout = self.get_df('timeout')
         self.df_addCart = self.get_df('addCart')
         self.df_removeCart = self.get_df('removeCart')
         self.df_purchased = self.get_df('purchase')
-        # self.uuid_load = list(set(self.df_loaded['uuid']))
-        # self.uuid_purchased = list(set(self.df_purchased['uuid']))
         self.features = ['pageviews', 'time_pageview_total', 'click_count_total', 'landing_count', 'max_pageviews', 'device']
 
     def __str__(self):
         return "TrackingParser"
 
-    ## load, leave, timeout, addCart, removeCart, purchase
-    @staticmethod
+    # @staticmethod
+    # def save_six_events_sql(df, table, chunk_size=100000):
+    #     """
+    #     iteratively update sql by chunk_size
+    #
+    #     Parameters
+    #     ----------
+    #     df: DataFrame
+    #     table: str: 1.clean_event_load, 2.clean_event_leave, 3.clean_event_addCart,
+    #     4.clean_event_removeCart, 5.clean_event_purchase, 6.clean_event_timeout
+    #
+    #     Returns
+    #     -------
+    #
+    #     """
+    #     if df.shape[0]==0:
+    #         print("no available dat to import")
+    #     else:
+    #         query = MySqlHelper.generate_update_SQLquery(df, table)
+    #         dict_list = df.to_dict('records')
+    #         n = int(math.ceil(len(dict_list)/chunk_size))
+    #         if n<=1: ## directly import all
+    #             print(f"size {len(dict_list)}, directly import all data to sql table")
+    #             MySqlHelper('tracker').ExecuteUpdate(query, dict_list)
+    #         else:
+    #             print(f"size {len(dict_list)}, import {n} times")
+    #             for i in range(n):
+    #                 if i==n-1: ## last round
+    #                     data = dict_list[i*chunk_size:]
+    #                     # print(data)
+    #                     MySqlHelper('tracker').ExecuteUpdate(query, data)
+    #                 else:
+    #                     data = dict_list[i*chunk_size:(i+1)*chunk_size]
+    #                     # print(data)
+    #                     MySqlHelper('tracker').ExecuteUpdate(query, data)
+
+
+
+    #### main function to get clean data
     @logging_channels(['clare_test'])
-    def save_raw_event_table(data_list, date, hour):
-        event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase']
-        df_list = []
-        for event_type in event_type_list:
-            df = TrackingParser.build_raw_event_df(data_list, event_type, date, hour)
-            ## drop duplicate using unique key in table
-            df.drop_duplicates(subset=['web_id','event_type','timestamp','uuid'], inplace=True)
-            # if event_type == 'addCart' or :
-
-
-            if event_type=='load': ## bigger than others
-                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_load', SQL_ACTION="INSERT INTO")
-            elif event_type=='leave': ## 2nd large
-                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_leave', SQL_ACTION="INSERT INTO")
-            elif event_type=='purchase': ## more important
-                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_purchase', SQL_ACTION="INSERT INTO")
-            else: ## addCart, removeCart, timeout
-                query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event', SQL_ACTION="INSERT INTO")
-            MySqlHelper('tracker').ExecuteUpdate(query, df.to_dict('records'))
-            print(f'finish saving {event_type} into db at {date} {hour}:00:00')
-            df_list += [df]
-        return df_list
-
-    @staticmethod
-    def build_raw_event_df(data_list, event_type, date, hour):
-        object_key = {'addCart':'cart', 'removeCart':'remove_cart', 'purchase':'purchase', 'load':'load'}
-        data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":event_type})
-
-        df = pd.DataFrame(data_list_filter)
-        df['date'], df['hour'] = [date]*df.shape[0], [hour]*df.shape[0]
-        if event_type in object_key.keys():
-            df.rename(columns={object_key[event_type]: 'event_value'}, inplace=True)
-            df['event_key'] = [event_type] * df.shape[0]
-        if 'behavior_type' in df.columns:
-            df.drop(columns=['behavior_type'], inplace=True)
-        df.dropna(inplace=True)
-        # df['event_key'] = [event_type] * df.shape[0]
-        # df['event_value'] = [json.dumps(row) for row in df['event_value']]
-        # df['event_key'] = [event_type] * df.shape[0]
+    def get_df(self, event_type):
+        data_list_filter = filterListofDictByDict(self.data_list, dict_criteria={"web_id": self.web_id, "event_type":event_type})
+        dict_list = []
         if event_type=='load':
-            df['event_value'] = [json.dumps(row) for row in df['event_value']]
+            for data_dict in data_list_filter:
+                dict_list += self.fully_parse_loaded(data_dict)
         elif event_type=='leave' or event_type=='timeout':
-            df['event_value'] = ['_'] * df.shape[0]
-            if 'record_user' in df.columns:
-                df['record_user'] = [json.dumps(row) for row in df['record_user']]
-            else:
-                df['record_user'] = ['_'] * df.shape[0]
-        else: ## addCart, removeCart, purchase
-            df['event_value'] = [json.dumps(row) for row in df['event_value']]
-            if 'record_user' in df.columns:
-                df['record_user'] = [json.dumps(row) for row in df['record_user']]
-            else:
-                df['record_user'] = ['_'] * df.shape[0]
-            # df['record_user'] = [json.dumps(row) for row in df['record_user']]
-
-        criteria_len = {'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16,
-                        'event_type': 16}
-        df = TrackingParser.clean_before_sql(df, criteria_len)
+            for data_dict in data_list_filter:
+                dict_list += self.fully_parse_leaved_timeout(data_dict)
+        ## addCart, removeCart, purchase
+        else:
+            for data_dict in data_list_filter:
+                dict_list += self.fully_parse_object(data_dict, event_type)
+        self.data_list_clean = dict_list
+        if dict_list == []:
+            return pd.DataFrame() ## early return
+        else:
+            df = pd.DataFrame(dict_list)
+        df['date_time'] = [datetime.datetime.utcfromtimestamp(ts/1000)+datetime.timedelta(hours=8) for ts in df['timestamp']]
+        if event_type=='purchase': ## unique key in table
+            df.drop(columns=self._get_drop_col('purchase'), inplace=True)
+        elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout':
+            df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
+            df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
+        df.drop_duplicates(subset=self._get_unique_col(event_type), inplace=True)
+        df = self.clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16})
         return df
 
+    @staticmethod
+    def _get_drop_col(event_type):
+        if event_type=='purchase':
+            drop_col_list = ['meta_title','time_pageview','scroll_depth','scroll_depth_px','click_count',
+                            'time_no_move','time_no_scroll','time_no_click','max_time_no_move','max_time_no_scroll',
+                            'max_time_no_scroll_array','max_time_no_scroll_depth_array','max_time_no_scroll_depth','max_time_no_scroll_depth_px',
+                            'max_time_no_click','max_scroll_depth_page','time_pageview_total_last']
+        return drop_col_list
+
+    ## for df.drop_duplicates(subset), can be more than unique key in sql table
+    @staticmethod
+    def _get_unique_col(event_type):
+        if event_type=='load':
+            subset = ['date_time', 'web_id', 'uuid', 'session_id']
+        elif event_type=='purchase':
+            subset = ['date_time', 'web_id', 'uuid', 'product_id', 'product_variant',
+                      'product_quantity', 'product_category']
+        elif event_type == 'addCart':
+            subset = ['date_time', 'web_id', 'uuid', 'product_id', 'product_price',
+                      'product_quantity', 'product_category']
+        elif event_type=='removeCart':
+            subset = ['date_time', 'web_id', 'uuid', 'product_id', 'sku_id']
+        elif event_type=='leave':
+            subset = ['date_time', 'web_id', 'uuid', 'session_id']
+        elif event_type == 'timeout':
+            subset = ['date_time', 'web_id', 'uuid', 'session_id']
+        return subset
 
     @staticmethod
     def clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16,
@@ -117,30 +145,16 @@ class TrackingParser:
                 df = df[df[col].map(len) <= criteria_len[col]]
         return df
 
-    @logging_channels(['clare_test'])
-    def get_df(self, event_type):
-        data_list_filter = filterListofDictByDict(self.data_list, dict_criteria={"web_id": self.web_id, "event_type":event_type})
-        dict_list = []
-        if event_type=='load':
-            for data_dict in data_list_filter:
-                dict_list += self.fully_parse_loaded(data_dict, self.use_db)
-        elif event_type=='leave' or event_type=='timeout':
-            for data_dict in data_list_filter:
-                dict_list += self.fully_parse_leaved_timeout(data_dict)
-        ## addCart, removeCart, purchase
-        else:
-            for data_dict in data_list_filter:
-                dict_list += self.fully_parse_object(data_dict, event_type, self.use_db)
-        df = pd.DataFrame(dict_list)
-        return df
-
     ## addCart,removeCart,purchased events
-    def fully_parse_object(self, data_dict, event_type, use_db):
+    def fully_parse_object(self, data_dict, event_type):
         object_key = self.dict_object_key[event_type]
         key_join_list, key_rename_list = self.dict_settings[event_type]
+        ## 1. parse common terms
         universial_dict = self.parse_rename_universial(data_dict)
+        ## 2. parse record_user terms
         record_dict = self.parse_rename_record_user(data_dict)
-        object_dict_list = self.parse_rename_object(data_dict, key_join_list, key_rename_list, object_key, use_db)
+        ## 3. parse cart, remove_cart or purchase terms
+        object_dict_list = self.parse_rename_object(data_dict, key_join_list, key_rename_list, object_key)
         result_dict_list = []
         for object_dict in object_dict_list:
             object_dict.update(universial_dict)
@@ -150,18 +164,18 @@ class TrackingParser:
 
     ## loaded event
     @staticmethod
-    def fully_parse_loaded(data_dict, use_db):
+    def fully_parse_loaded(data_dict):
         universial_dict = TrackingParser.parse_rename_universial(data_dict)
-        key_list = ['dv', 'ul', 'un', 'm_t', 'i_l', 'ps', 't_p_t', 's_id', 's_idl', 'l_c',
-                    'c_c_t', 'mt_nm', 'mt_ns', 'mt_nc', 'mt_nd', 'mps', 'mt_p', 'mt_p_t', 'ms_d']
+        key_list = ['dv', 'ul', 'un', 'm_t', 'i_l',
+                    'ps', 't_p_t', 's_id', 's_idl', 'l_c',
+                    's_h','w_ih','c_c_t', 'mt_nm', 'mt_ns',
+                    'mt_nc', 'mps', 'mt_p', 'mt_p_t', 'ms_d'] ## remove mt_nd(max_time_no_scroll_depth)
         key_rename_list = ['device', 'url_last', 'url_now', 'meta_title', 'is_landing',
                            'pageviews', 'time_pageview_total', 'session_id', 'session_id_last', 'landing_count',
-                           'click_count_total', 'max_time_no_move', 'max_time_no_scroll', 'max_time_no_click', 'max_time_no_scroll_depth',
-                           'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth']
-        if use_db:
-            object_dict = json.loads(data_dict['event_value'])
-        else:
-            object_dict = data_dict['load']
+                           'scroll_height', 'window_innerHeight', 'click_count_total', 'max_time_no_move_last', 'max_time_no_scroll_last',
+                           'max_time_no_click_last', 'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth']
+
+        object_dict = data_dict['load']
         loaded_dict = {}
         for key, key_rename in zip(key_list, key_rename_list):
             if key not in object_dict.keys():
@@ -181,13 +195,14 @@ class TrackingParser:
 
     @staticmethod
     def parse_rename_universial(data_dict):
-        key_list = ['web_id', 'uuid', 'ga_id', 'fb_id', 'timestamp']
+        key_list = ['web_id', 'uuid', 'ga_id', 'fb_id', 'timestamp', 'coupon']
+        key_rename_list = ['web_id', 'uuid', 'ga_id', 'fb_id', 'timestamp', 'avivid_coupon']
         universial_dict = {}
-        for key in key_list:
+        for key,key_rename in zip(key_list,key_rename_list):
             if key in data_dict.keys():
-                universial_dict.update({key: data_dict[key]})
+                universial_dict.update({key_rename: data_dict[key]})
             else:
-                universial_dict.update({key: '_'})
+                universial_dict.update({key_rename: '_'})
         return universial_dict
 
     @staticmethod
@@ -225,37 +240,46 @@ class TrackingParser:
 
     ## main for parse and rename 'addcart', 'removeCart', 'purchase' event
     @staticmethod
-    def parse_rename_object(data_dict, key_join_list, key_rename_list, object_key='purchase', use_db=True):
-        if use_db:
-            collection_dict, dict_object = {}, json.loads(json.loads(data_dict['event_value']))
-        else:
-            collection_dict, dict_object = {}, json.loads(data_dict[object_key])
+    def parse_rename_object(data_dict, key_join_list, key_rename_list, object_key='purchase'):
+        if object_key not in data_dict.keys():
+            print(f"{object_key} not in {data_dict}, return []")
+            return []
+        collection_dict, dict_object = {}, json.loads(data_dict[object_key])
+        ## for dealing with adding 'purchase' key in purchase (91app, lovingfamily)
+        if key_join_list[0].split('.')[0] not in dict_object.keys():
+            dict_object = list(dict_object.values())[0]
+        ## skip dict_object is not dict
+        if type(dict_object)!=dict:
+            return []
         value_list = []
         n_list = 0
+        # print(dict_object)
         ## parse dict type key and store list type key
         for key, key_rename in zip(key_join_list, key_rename_list):
             key_list = key.split('.')
             value = ''
             if len(key_list) == 1:  ##directly access dict
-                for k in key_list:
-                    collection_dict.update({key_rename: dict_object[k]})
+                for k in key_list: ## append -1 if key not found
+                    collection_dict.update({key_rename: dict_object[k]}) if k in dict_object.keys() else collection_dict.update({key_rename: -1})
             else:  ## parse multiple layer
-                for key in key_list:
+                for key_2nd in key_list:
                     if value == '':  ## 1st level
-                        value = '_' if key == 'empty' else dict_object[key]
+                        value = '_' if key_2nd == 'empty' else dict_object[key_2nd]
+                    elif key_2nd=='json': ## use json.loads() => i3fresh case
+                        value = json.loads(value)
                     elif type(value) == dict:  ## 2nd, 3rd... level
-                        value = '_' if key == 'empty' else value[key]
+                        value = '_' if key_2nd == 'empty' else value[key_2nd]
                         collection_dict.update({key_rename: value})
                     elif type(value) == list:  ## 2nd, 3rd... level(parse list)
                         n_list = len(value)
-                        for v in value:
-                            if key in v.keys():
-                                value = '_' if key == 'empty' else v[key]
-                            else:
+                        for v in value: ## value: list [{k21:v21, k22:v22, k23:v23,...}]
+                            if key_2nd in v.keys():
+                                value = '_' if key == 'empty' else v[key_2nd]
+                            else: ## not in k21,k22,k23...
                                 value = '_'
                             value_list += [value]
                     else:
-                        print('do nothing')
+                        print(f'do nothing in {dict_object}')
         ## for parse multiple objects in a main_object
         if value_list == []:
             collection_purchase_dict_list = [collection_dict]
@@ -290,32 +314,6 @@ class TrackingParser:
             dict_settings.update({event_type: settings[i*2:(i+1)*2]})
         return dict_settings
 
-    ################################# get data using sql #################################
-    @staticmethod
-    def generate_sql_query_raw_event(web_id, table='raw_event', date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
-        columns = ['uuid', 'timestamp', 'event_type', 'coupon', 'record_user', 'event_key', 'event_value', 'date', 'hour']
-        query = f"""
-        SELECT 
-            {','.join(columns)}
-        FROM
-            {table}
-        WHERE
-            web_id = '{web_id}' AND 
-            date BETWEEN '{date_utc8_start}' AND '{date_utc8_end}'
-        """
-        return query, columns
-
-    @staticmethod
-    @timing
-    def fetch_six_events_data_by_daterange(web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
-        table_list = ['raw_event_load', 'raw_event_purchase', 'raw_event']
-        data_list = []
-        for table in table_list:
-            query, columns = TrackingParser.generate_sql_query_raw_event(web_id, table, date_utc8_start, date_utc8_end)
-            data_list += MySqlHelper("tracker").ExecuteSelect(query)
-        df = pd.DataFrame(data_list, columns=columns)
-        df['web_id'] = [web_id]*df.shape[0]
-        return df.to_dict('records')
 
     ################################# get data using local storage #################################
     @staticmethod
@@ -393,7 +391,93 @@ class TrackingParser:
             os.path.join(ROOT_DIR, "s3data", datetime_to_str(root_folder, pattern="%Y/%m/%d/%H"), "rawData.pickle") for
             root_folder in datetime_list]
         return file_list
-################################# get data using local storage #################################
+
+    ################################# import raw data to sql table #################################
+    # ## load, leave, timeout, addCart, removeCart, purchase
+    # @staticmethod
+    # @logging_channels(['clare_test'])
+    # def save_raw_event_table(data_list, date, hour):
+    #     event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase']
+    #     df_list = []
+    #     for event_type in event_type_list:
+    #         df = TrackingParser.build_raw_event_df(data_list, event_type, date, hour)
+    #         ## drop duplicate using unique key in table
+    #         df.drop_duplicates(subset=['web_id','event_type','timestamp','uuid'], inplace=True)
+    #         if event_type=='load': ## bigger than others
+    #             query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_load', SQL_ACTION="INSERT INTO")
+    #         elif event_type=='leave': ## 2nd large
+    #             query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_leave', SQL_ACTION="INSERT INTO")
+    #         elif event_type=='purchase': ## more important
+    #             query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event_purchase', SQL_ACTION="INSERT INTO")
+    #         else: ## addCart, removeCart, timeout
+    #             query = MySqlHelper.generate_update_SQLquery(df, 'tracker.raw_event', SQL_ACTION="INSERT INTO")
+    #         MySqlHelper('tracker').ExecuteUpdate(query, df.to_dict('records'))
+    #         print(f'finish saving {event_type} into db at {date} {hour}:00:00')
+    #         df_list += [df]
+    #     return df_list
+    #
+    # @staticmethod
+    # def build_raw_event_df(data_list, event_type, date, hour):
+    #     object_key = {'addCart':'cart', 'removeCart':'remove_cart', 'purchase':'purchase', 'load':'load'}
+    #     data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":event_type})
+    #
+    #     df = pd.DataFrame(data_list_filter)
+    #     df['date'], df['hour'] = [date]*df.shape[0], [hour]*df.shape[0]
+    #     if event_type in object_key.keys():
+    #         df.rename(columns={object_key[event_type]: 'event_value'}, inplace=True)
+    #         df['event_key'] = [event_type] * df.shape[0]
+    #     if 'behavior_type' in df.columns:
+    #         df.drop(columns=['behavior_type'], inplace=True)
+    #     df.dropna(inplace=True)
+    #     # df['event_key'] = [event_type] * df.shape[0]
+    #     # df['event_value'] = [json.dumps(row) for row in df['event_value']]
+    #     # df['event_key'] = [event_type] * df.shape[0]
+    #     if event_type=='load':
+    #         df['event_value'] = [json.dumps(row) for row in df['event_value']]
+    #     elif event_type=='leave' or event_type=='timeout':
+    #         df['event_value'] = ['_'] * df.shape[0]
+    #         if 'record_user' in df.columns:
+    #             df['record_user'] = [json.dumps(row) for row in df['record_user']]
+    #         else:
+    #             df['record_user'] = ['_'] * df.shape[0]
+    #     else: ## addCart, removeCart, purchase
+    #         df['event_value'] = [json.dumps(row) for row in df['event_value']]
+    #         if 'record_user' in df.columns:
+    #             df['record_user'] = [json.dumps(row) for row in df['record_user']]
+    #         else:
+    #             df['record_user'] = ['_'] * df.shape[0]
+    #         # df['record_user'] = [json.dumps(row) for row in df['record_user']]
+    #
+    #     criteria_len = {'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16,
+    #                     'event_type': 16}
+    #     df = TrackingParser.clean_before_sql(df, criteria_len)
+    #     return df
+    # ################################# get data using sql #################################
+    # @staticmethod
+    # def generate_sql_query_raw_event(web_id, table='raw_event', date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
+    #     columns = ['uuid', 'timestamp', 'event_type', 'coupon', 'record_user', 'event_key', 'event_value', 'date', 'hour']
+    #     query = f"""
+    #     SELECT
+    #         {','.join(columns)}
+    #     FROM
+    #         {table}
+    #     WHERE
+    #         web_id = '{web_id}' AND
+    #         date BETWEEN '{date_utc8_start}' AND '{date_utc8_end}'
+    #     """
+    #     return query, columns
+    #
+    # @staticmethod
+    # @timing
+    # def fetch_six_events_data_by_daterange(web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
+    #     table_list = ['raw_event_load', 'raw_event_purchase', 'raw_event']
+    #     data_list = []
+    #     for table in table_list:
+    #         query, columns = TrackingParser.generate_sql_query_raw_event(web_id, table, date_utc8_start, date_utc8_end)
+    #         data_list += MySqlHelper("tracker").ExecuteSelect(query)
+    #     df = pd.DataFrame(data_list, columns=columns)
+    #     df['web_id'] = [web_id]*df.shape[0]
+    #     return df.to_dict('records')
 
 
 
@@ -512,12 +596,47 @@ def append_purchased_column(df, uuid_purchased):
 
 
 if __name__ == "__main__":
-    web_id = "nineyi1105"
-    date_utc8_start = "2022-01-19"
-    date_utc8_end = "2022-01-19"
+    web_id = "nineyi11"
+    date_utc8_start = "2022-01-30"
+    date_utc8_end = "2022-01-30"
+
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
-    df_loaded = tracking.df_loaded
-    df_purchased = tracking.df_purchased
+
+    # # df_loaded = tracking.df_loaded
+    # # df_purchased = tracking.df_purchased
+    # # df_addCart = tracking.df_addCart
+    # # df_removeCart = tracking.df_removeCart
+    # # df_leaved = tracking.df_leaved
+    #
+    # # df_loaded['date_time'] = [datetime.datetime.utcfromtimestamp(ts/1000)+datetime.timedelta(hours=8) for ts in df_loaded['timestamp']]
+    data_list_filter = filterListofDictByDict(tracking.data_list, dict_criteria={"event_type":"addCart", "web_id":'nineyi11'}) #"web_id":"nineyi11"
+    #
+    # ## timeout
+    # query = MySqlHelper.generate_update_SQLquery(tracking.df_timeout, 'clean_event_timeout')
+    # MySqlHelper('tracker').ExecuteUpdate(query, tracking.df_timeout.to_dict('records'))
+
+    ## leave
+    # query = MySqlHelper.generate_update_SQLquery(df_leaved, 'clean_event_leave')
+    # MySqlHelper('tracker').ExecuteUpdate(query, df_leaved.to_dict('records'))
+
+    # ## load
+    # query = MySqlHelper.generate_update_SQLquery(df_loaded, 'clean_event_load')
+    # MySqlHelper('tracker').ExecuteUpdate(query, df_loaded.to_dict('records'))
+
+    ## removeCart
+    # query = MySqlHelper.generate_update_SQLquery(df_removeCart, 'clean_event_removeCart', SQL_ACTION='INSERT INTO')
+    # MySqlHelper('tracker').ExecuteUpdate(query, df_removeCart.to_dict('records'))
+
+    ## addCart
+    # query = MySqlHelper.generate_update_SQLquery(df_addCart, 'clean_event_addCart', SQL_ACTION='INSERT INTO')
+    # MySqlHelper('tracker').ExecuteUpdate(query, df_addCart.to_dict('records'))
+
+    ## purchase
+    # query = MySqlHelper.generate_update_SQLquery(df_purchased, 'clean_event_purchase', SQL_ACTION='INSERT INTO')
+    # MySqlHelper('tracker').ExecuteUpdate(query, df_purchased.to_dict('records'))
+
+    ## currency,items.item_id,items.item_name,items.quantity,items.price,items.sku_id,items.sku_name
+    ## currency,product_id,product_name,product_quantity,product_price,sku_id,sku_name
 
     # web_id = "94monster"
     # df = TrackingParser.fetch_six_events_data_by_daterange(web_id, date_utc8_start='2022-01-18', date_utc8_end='2022-01-18')

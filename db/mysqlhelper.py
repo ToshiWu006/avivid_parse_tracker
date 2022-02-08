@@ -4,6 +4,7 @@ from basic import logging_channels
 from sqlalchemy import create_engine, Table, MetaData, insert
 from sqlalchemy import Column, Integer, String, DATETIME
 import pandas as pd
+import math
 
 class MySqlHelper:
 
@@ -12,6 +13,43 @@ class MySqlHelper:
         self.sql_connector = MysqlConnector(CONN_INFO, is_ssh=is_ssh)
         self.CONN_INFO = CONN_INFO
         self.is_ssh = is_ssh
+
+    @staticmethod
+    def ExecuteUpdatebyChunk(df, db, table, chunk_size=100000):
+        """
+        iteratively update sql by chunk_size
+
+        Parameters
+        ----------
+        df: DataFrame
+        db: str: schema name
+        table: str: table name
+
+        Returns
+        -------
+
+        """
+        if df.shape[0]==0:
+            print("no available dat to import")
+        else:
+            query = MySqlHelper.generate_update_SQLquery(df, table)
+            dict_list = df.to_dict('records')
+            n = int(math.ceil(len(dict_list)/chunk_size))
+            if n<=1: ## directly import all
+                print(f"size {len(dict_list)}, directly import all data to sql table")
+                MySqlHelper(db).ExecuteUpdate(query, dict_list)
+            else:
+                # print(f"size {len(dict_list)}, import {n} times")
+                for i in range(n):
+                    print(f"size {len(dict_list)}, import {i+1}/{n} times")
+                    if i==n-1: ## last round
+                        data = dict_list[i*chunk_size:]
+                        # print(data)
+                        MySqlHelper(db).ExecuteUpdate(query, data)
+                    else:
+                        data = dict_list[i*chunk_size:(i+1)*chunk_size]
+                        # print(data)
+                        MySqlHelper(db).ExecuteUpdate(query, data)
 
     def ExecuteDelete(self, query, disconnect=False):
         '''

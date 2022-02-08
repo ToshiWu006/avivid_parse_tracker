@@ -4,7 +4,7 @@ import datetime
 import pickle
 from pathlib import Path
 from definitions import ROOT_DIR
-from basic import datetime_to_str, logging_channels, filterListofDict, filterListofDictByList, filterListofDictByDict, timing, to_datetime
+from basic import datetime_to_str, logging_channels, filterListofDictByDict, timing, to_datetime
 
 class AmazonS3 :
     def __init__(self, bucket_name='elephants3', settings_filename='s3_settings.json'):
