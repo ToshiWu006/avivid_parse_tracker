@@ -1,5 +1,5 @@
 from s3_parser import TrackingParser
-from import_tracker_clean_data_yesterday import save_six_clean_events, fetch_enable_analysis_web_id
+from import_tracker_clean_data_yesterday import save_six_clean_events, fetch_enable_analysis_web_id, main_import_tracker
 import datetime, argparse
 
 
@@ -25,10 +25,14 @@ if __name__ == "__main__":
         web_id_all = fetch_enable_analysis_web_id()
         for web_id in web_id_all:
             tracking = TrackingParser(web_id, date_start, date_end)
-            save_six_clean_events(tracking)
+            ## add six events df to instance
+            df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+            save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased)
     else:
         tracking = TrackingParser(web_id, date_start, date_end)
-        save_six_clean_events(tracking)
+        ## add six events df to instance
+        df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+        save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased)
 
 
 

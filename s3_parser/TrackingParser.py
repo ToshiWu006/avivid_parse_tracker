@@ -12,64 +12,51 @@ import matplotlib.pyplot as plt
 class TrackingParser:
     def __init__(self, web_id, date_utc8_start='2022-01-01', date_utc8_end='2022-01-11'):
         self.web_id = web_id
+        # self.use_db = use_db
         self.event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase']
         self.dict_object_key = {'addCart':'cart', 'removeCart':'remove_cart', 'purchase':'purchase'}
         self.dict_settings = self.fetch_parse_key_settings(web_id)
+        self.date_utc8_start = date_utc8_start
+        self.date_utc8_end = date_utc8_end
         self.data_list = self.get_data_by_daterange(date_utc8_start, date_utc8_end)
-
-        self.df_loaded = self.get_df('load')
-        self.df_leaved = self.get_df('leave')
-        self.df_timeout = self.get_df('timeout')
-        self.df_addCart = self.get_df('addCart')
-        self.df_removeCart = self.get_df('removeCart')
-        self.df_purchased = self.get_df('purchase')
+        ## use db or use local raw data
+        # self.df_loaded = self.get_df_from_db('load') if use_db else self.get_df('load')
+        # self.df_leaved = self.get_df_from_db('leave') if use_db else self.get_df('leave')
+        # self.df_timeout = self.get_df_from_db('timeout') if use_db else self.get_df('timeout')
+        # self.df_addCart = self.get_df_from_db('addCart') if use_db else self.get_df('addCart')
+        # self.df_removeCart = self.get_df_from_db('removeCart') if use_db else self.get_df('removeCart')
+        # self.df_purchased = self.get_df_from_db('purchase') if use_db else self.get_df('purchase')
         self.features = ['pageviews', 'time_pageview_total', 'click_count_total', 'landing_count', 'max_pageviews', 'device']
 
     def __str__(self):
         return "TrackingParser"
 
-    # @staticmethod
-    # def save_six_events_sql(df, table, chunk_size=100000):
-    #     """
-    #     iteratively update sql by chunk_size
-    #
-    #     Parameters
-    #     ----------
-    #     df: DataFrame
-    #     table: str: 1.clean_event_load, 2.clean_event_leave, 3.clean_event_addCart,
-    #     4.clean_event_removeCart, 5.clean_event_purchase, 6.clean_event_timeout
-    #
-    #     Returns
-    #     -------
-    #
-    #     """
-    #     if df.shape[0]==0:
-    #         print("no available dat to import")
-    #     else:
-    #         query = MySqlHelper.generate_update_SQLquery(df, table)
-    #         dict_list = df.to_dict('records')
-    #         n = int(math.ceil(len(dict_list)/chunk_size))
-    #         if n<=1: ## directly import all
-    #             print(f"size {len(dict_list)}, directly import all data to sql table")
-    #             MySqlHelper('tracker').ExecuteUpdate(query, dict_list)
-    #         else:
-    #             print(f"size {len(dict_list)}, import {n} times")
-    #             for i in range(n):
-    #                 if i==n-1: ## last round
-    #                     data = dict_list[i*chunk_size:]
-    #                     # print(data)
-    #                     MySqlHelper('tracker').ExecuteUpdate(query, data)
-    #                 else:
-    #                     data = dict_list[i*chunk_size:(i+1)*chunk_size]
-    #                     # print(data)
-    #                     MySqlHelper('tracker').ExecuteUpdate(query, data)
-
-
+    def get_six_events_df(self, web_id=None, data_list=None, dict_settings=None, use_db=False):
+        if web_id==None:
+            web_id = self.web_id
+        if data_list==None:
+            data_list = self.data_list
+        if dict_settings==None:
+            dict_settings = self.dict_settings
+        if web_id!=self.web_id:
+            ## change to use dict_settings from web_id instead of self.web_id
+            dict_settings = self.fetch_parse_key_settings(web_id)
+        df_loaded = self.get_df_from_db('load') if use_db else self.get_df(web_id, data_list, 'load', dict_settings)
+        df_leaved = self.get_df_from_db('leave') if use_db else self.get_df(web_id, data_list, 'leave', dict_settings)
+        df_timeout = self.get_df_from_db('timeout') if use_db else self.get_df(web_id, data_list, 'timeout', dict_settings)
+        df_addCart = self.get_df_from_db('addCart') if use_db else self.get_df(web_id, data_list, 'addCart', dict_settings)
+        df_removeCart = self.get_df_from_db('removeCart') if use_db else self.get_df(web_id, data_list, 'removeCart', dict_settings)
+        df_purchased = self.get_df_from_db('purchase') if use_db else self.get_df(web_id, data_list, 'purchase', dict_settings)
+        # self.df_loaded, self.df_leaved, self.df_timeout = df_loaded, df_leaved, df_timeout
+        # self.df_addCart, self.df_removeCart, self.df_purchased = df_addCart, df_removeCart, df_purchased
+        return df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased
 
     #### main function to get clean data
     @logging_channels(['clare_test'])
-    def get_df(self, event_type):
-        data_list_filter = filterListofDictByDict(self.data_list, dict_criteria={"web_id": self.web_id, "event_type":event_type})
+    def get_df(self, web_id, data_list, event_type, dict_settings=None):
+        if dict_settings==None:
+            dict_settings = self.fetch_parse_key_settings(web_id)
+        data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":event_type})
         dict_list = []
         if event_type=='load':
             for data_dict in data_list_filter:
@@ -80,7 +67,7 @@ class TrackingParser:
         ## addCart, removeCart, purchase
         else:
             for data_dict in data_list_filter:
-                dict_list += self.fully_parse_object(data_dict, event_type)
+                dict_list += self.fully_parse_object(data_dict, event_type, dict_settings)
         self.data_list_clean = dict_list
         if dict_list == []:
             return pd.DataFrame() ## early return
@@ -95,6 +82,17 @@ class TrackingParser:
         df.drop_duplicates(subset=self._get_unique_col(event_type), inplace=True)
         df.dropna(inplace=True)
         df = self.clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16})
+        return df
+
+    @timing
+    def get_df_from_db(self, event_type):
+        columns = self._get_df_event_col(event_type)
+        table = self._get_event_table(event_type)
+        query = f"""SELECT {','.join(columns)} FROM {table} WHERE date_time BETWEEN '{self.date_utc8_start}' and '{self.date_utc8_end}' 
+                    and web_id='{self.web_id}'"""
+        print(query)
+        data = MySqlHelper('tracker').ExecuteSelect(query)
+        df = pd.DataFrame(data, columns=columns)
         return df
 
     @staticmethod
@@ -147,9 +145,9 @@ class TrackingParser:
         return df
 
     ## addCart,removeCart,purchased events
-    def fully_parse_object(self, data_dict, event_type):
+    def fully_parse_object(self, data_dict, event_type, dict_settings):
         object_key = self.dict_object_key[event_type]
-        key_join_list, key_rename_list = self.dict_settings[event_type]
+        key_join_list, key_rename_list = dict_settings[event_type]
         ## 1. parse common terms
         universial_dict = self.parse_rename_universial(data_dict)
         ## 2. parse record_user terms
@@ -170,11 +168,13 @@ class TrackingParser:
         key_list = ['dv', 'ul', 'un', 'm_t', 'i_l',
                     'ps', 't_p_t', 's_id', 's_idl', 'l_c',
                     's_h','w_ih','c_c_t', 'mt_nm', 'mt_ns',
-                    'mt_nc', 'mps', 'mt_p', 'mt_p_t', 'ms_d'] ## remove mt_nd(max_time_no_scroll_depth)
+                    'mt_nc', 'mps', 'mt_p', 'mt_p_t', 'ms_d',
+                    'i_ac', 'i_rc', 'i_pb'] ## remove mt_nd(max_time_no_scroll_depth)
         key_rename_list = ['device', 'url_last', 'url_now', 'meta_title', 'is_landing',
                            'pageviews', 'time_pageview_total', 'session_id', 'session_id_last', 'landing_count',
                            'scroll_height', 'window_innerHeight', 'click_count_total', 'max_time_no_move_last', 'max_time_no_scroll_last',
-                           'max_time_no_click_last', 'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth']
+                           'max_time_no_click_last', 'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth',
+                           'is_addCart', 'is_removeCart', 'is_purchased_before']
 
         object_dict = data_dict['load']
         loaded_dict = {}
@@ -218,7 +218,8 @@ class TrackingParser:
                     'mt_nc', 'i_l', 's_idl', 's_id', 'ps',
                     't_p_t', 't_p_tl', 'mps', 'mt_p', 'mt_p_t',
                     'ms_d', 'ms_d_p', 'ms_d_pl', 'mt_nml', 'mt_nsl',
-                    'mt_ncl', 'ms_dl', 'l_c']
+                    'mt_ncl', 'ms_dl', 'l_c',
+                    'i_ac', 'i_rc', 'i_pb']
         key_rename_list = ['device', 'url_last', 'url_now', 'meta_title', 'scroll_height',
                            'window_innerHeight', 'time_pageview', 'scroll_depth', 'scroll_depth_px', 'click_count',
                            'click_count_total', 'time_no_move', 'time_no_scroll', 'time_no_click', 'max_time_no_move',
@@ -229,7 +230,8 @@ class TrackingParser:
                            'max_time_pageview_total',
                            'max_scroll_depth', 'max_scroll_depth_page', 'max_scroll_depth_page_last',
                            'max_time_no_move_last', 'max_time_no_scroll_last',
-                           'max_time_no_click_last', 'max_scroll_depth_last', 'landing_count']
+                           'max_time_no_click_last', 'max_scroll_depth_last', 'landing_count',
+                           'is_addCart', 'is_removeCart', 'is_purchased_before']
         record_dict = {}
         for key, key_rename in zip(key_list, key_rename_list):
             if key in record_user_dict.keys():
@@ -392,6 +394,111 @@ class TrackingParser:
             os.path.join(ROOT_DIR, "s3data", datetime_to_str(root_folder, pattern="%Y/%m/%d/%H"), "rawData.pickle") for
             root_folder in datetime_list]
         return file_list
+    @staticmethod
+    def _get_event_table(event_type):
+        if event_type=='load':
+            table = 'clean_event_load'
+        elif event_type == 'leave':
+            table = 'clean_event_leave'
+        elif event_type=='timeout':
+            table = 'clean_event_timeout'
+        elif event_type=='addCart':
+            table = 'clean_event_addCart'
+        elif event_type=='removeCart':
+            table = 'clean_event_removeCart'
+        elif event_type=='purchase':
+            table = 'clean_event_purchase'
+        else:
+            table = ''
+        return table
+
+    @staticmethod
+    def _get_df_event_col(event_type):
+        if event_type=='load':
+            columns = ['web_id', 'uuid', 'ga_id', 'fb_id', 'timestamp', 'avivid_coupon',
+                       'device', 'url_last', 'url_now', 'meta_title', 'is_landing',
+                       'pageviews', 'time_pageview_total', 'session_id', 'session_id_last',
+                       'landing_count', 'scroll_height', 'window_innerHeight',
+                       'click_count_total', 'max_time_no_move_last', 'max_time_no_scroll_last',
+                       'max_time_no_click_last', 'max_pageviews', 'max_time_pageview',
+                       'max_time_pageview_total', 'max_scroll_depth', 'date_time']
+        elif event_type=='leave':
+            columns = ['web_id', 'uuid', 'ga_id', 'fb_id', 'timestamp', 'avivid_coupon',
+                       'device', 'url_last', 'url_now', 'meta_title', 'scroll_height',
+                       'window_innerHeight', 'time_pageview', 'scroll_depth',
+                       'scroll_depth_px', 'click_count', 'click_count_total', 'time_no_move',
+                       'time_no_scroll', 'time_no_click', 'max_time_no_move',
+                       'max_time_no_scroll', 'max_time_no_scroll_array',
+                       'max_time_no_scroll_depth_array', 'max_time_no_scroll_depth',
+                       'max_time_no_scroll_depth_px', 'max_time_no_click', 'is_landing',
+                       'session_id_last', 'session_id', 'pageviews', 'time_pageview_total',
+                       'time_pageview_total_last', 'max_pageviews', 'max_time_pageview',
+                       'max_time_pageview_total', 'max_scroll_depth', 'max_scroll_depth_page',
+                       'max_scroll_depth_page_last', 'max_time_no_move_last',
+                       'max_time_no_scroll_last', 'max_time_no_click_last',
+                       'max_scroll_depth_last', 'landing_count', 'date_time']
+        elif event_type=='timeout':
+            columns = ['web_id', 'uuid', 'ga_id', 'fb_id', 'timestamp', 'avivid_coupon',
+                       'device', 'url_last', 'url_now', 'meta_title', 'scroll_height',
+                       'window_innerHeight', 'time_pageview', 'scroll_depth',
+                       'scroll_depth_px', 'click_count', 'click_count_total', 'time_no_move',
+                       'time_no_scroll', 'time_no_click', 'max_time_no_move',
+                       'max_time_no_scroll', 'max_time_no_scroll_array',
+                       'max_time_no_scroll_depth_array', 'max_time_no_scroll_depth',
+                       'max_time_no_scroll_depth_px', 'max_time_no_click', 'is_landing',
+                       'session_id_last', 'session_id', 'pageviews', 'time_pageview_total',
+                       'time_pageview_total_last', 'max_pageviews', 'max_time_pageview',
+                       'max_time_pageview_total', 'max_scroll_depth', 'max_scroll_depth_page',
+                       'max_scroll_depth_page_last', 'max_time_no_move_last',
+                       'max_time_no_scroll_last', 'max_time_no_click_last',
+                       'max_scroll_depth_last', 'landing_count', 'date_time']
+        elif event_type=='addCart':
+            columns = ['product_category', 'product_category_name', 'product_id',
+                       'product_name', 'product_price', 'product_quantity', 'web_id', 'uuid',
+                       'ga_id', 'fb_id', 'timestamp', 'avivid_coupon', 'device', 'url_last',
+                       'url_now', 'meta_title', 'scroll_height', 'window_innerHeight',
+                       'time_pageview', 'scroll_depth', 'scroll_depth_px', 'click_count',
+                       'click_count_total', 'time_no_move', 'time_no_scroll', 'time_no_click',
+                       'max_time_no_move', 'max_time_no_scroll', 'max_time_no_scroll_array',
+                       'max_time_no_scroll_depth_array', 'max_time_no_scroll_depth',
+                       'max_time_no_scroll_depth_px', 'max_time_no_click', 'is_landing',
+                       'session_id_last', 'session_id', 'pageviews', 'time_pageview_total',
+                       'time_pageview_total_last', 'max_pageviews', 'max_time_pageview',
+                       'max_time_pageview_total', 'max_scroll_depth', 'max_scroll_depth_page',
+                       'max_scroll_depth_page_last', 'max_time_no_move_last',
+                       'max_time_no_scroll_last', 'max_time_no_click_last',
+                       'max_scroll_depth_last', 'landing_count', 'date_time']
+        elif event_type=='removeCart':
+            columns = ['product_id', 'product_name', 'product_quantity', 'product_price',
+                       'sku_id', 'sku_name', 'currency', 'web_id', 'uuid', 'ga_id', 'fb_id',
+                       'timestamp', 'avivid_coupon', 'device', 'url_last', 'url_now',
+                       'meta_title', 'scroll_height', 'window_innerHeight', 'time_pageview',
+                       'scroll_depth', 'scroll_depth_px', 'click_count', 'click_count_total',
+                       'time_no_move', 'time_no_scroll', 'time_no_click', 'max_time_no_move',
+                       'max_time_no_scroll', 'max_time_no_scroll_array',
+                       'max_time_no_scroll_depth_array', 'max_time_no_scroll_depth',
+                       'max_time_no_scroll_depth_px', 'max_time_no_click', 'is_landing',
+                       'session_id_last', 'session_id', 'pageviews', 'time_pageview_total',
+                       'time_pageview_total_last', 'max_pageviews', 'max_time_pageview',
+                       'max_time_pageview_total', 'max_scroll_depth', 'max_scroll_depth_page',
+                       'max_scroll_depth_page_last', 'max_time_no_move_last',
+                       'max_time_no_scroll_last', 'max_time_no_click_last',
+                       'max_scroll_depth_last', 'landing_count', 'date_time']
+        elif event_type=='purchase':
+            columns = ['product_id', 'product_name', 'product_price', 'product_quantity',
+                       'product_category', 'product_variant', 'coupon', 'currency', 'order_id',
+                       'total_price', 'shipping_price', 'web_id', 'uuid', 'ga_id', 'fb_id',
+                       'timestamp', 'avivid_coupon', 'device', 'url_last', 'url_now',
+                       'scroll_height', 'window_innerHeight', 'click_count_total',
+                       'is_landing', 'session_id_last', 'session_id', 'pageviews',
+                       'time_pageview_total', 'max_pageviews', 'max_time_pageview',
+                       'max_time_pageview_total', 'max_scroll_depth',
+                       'max_scroll_depth_page_last', 'max_time_no_move_last',
+                       'max_time_no_scroll_last', 'max_time_no_click_last',
+                       'max_scroll_depth_last', 'landing_count', 'date_time']
+        else:
+            columns = []
+        return columns
 
     ################################# import raw data to sql table #################################
     # ## load, leave, timeout, addCart, removeCart, purchase
@@ -481,127 +588,14 @@ class TrackingParser:
     #     return df.to_dict('records')
 
 
-
-@timing
-def fetch_91app_web_id():
-    query = f"""SELECT web_id
-                        FROM cdp_tracking_settings where platform='91'"""
-    print(query)
-    data = MySqlHelper("rheacache-db0").ExecuteSelect(query)
-    web_id_list = [d[0] for d in data]
-    return web_id_list
-
-
-def collect_from_web_id_list(web_id_list, date_utc8_start, date_utc8_end):
-    df_loaded_all = pd.DataFrame()
-    df_purchased_all = pd.DataFrame()
-    len_loaded = {}
-    for i,web_id in enumerate(web_id_list):
-        tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
-
-        df_loaded = tracking.df_loaded
-        l = df_loaded.shape[0]
-        len_loaded.update({web_id:l})
-        if l==0:
-            continue
-        df_loaded['uuid'] = df_loaded.sort_values(by=['timestamp'])['uuid'].astype(str)
-        df_loaded = df_loaded[df_loaded['uuid'].map(len)==36]
-        df_purchased = tracking.df_purchased
-        if i==0:
-            df_loaded_all = df_loaded
-            df_purchased_all = df_purchased
-        else:
-            df_loaded_all = df_loaded_all.append(df_loaded)
-            df_purchased_all = df_purchased_all.append(df_purchased)
-    return df_loaded_all, df_purchased_all, len_loaded
-
-
-def collect_features(df_loaded, df_purchased, keys_collect=['uuid', 'pageviews', 'time_pageview_total']):
-    uuid_load = list(set(df_loaded['uuid']))
-    uuid_purchased = list(set(df_purchased['uuid']))
-    dict_collect_list = []
-    # keys_collect = ['uuid', 'device', 'pageviews', 'time_pageview_total', 'landing_count',
-    #                 'click_count_total', 'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth']
-    # keys_collect = ['uuid', 'pageviews', 'time_pageview_total']
-    for i,uuid in enumerate(uuid_load):
-        dict_collect = {}
-        df_query = df_loaded.query(f"uuid=='{uuid}'").iloc[-1]
-        for key in keys_collect:
-            vlaue = df_query[key]
-            dict_collect.update({key: vlaue})
-            if key=='uuid':
-                if vlaue in uuid_purchased:
-                    dict_append = {'is_purchased': 1}
-                else:
-                    dict_append = {'is_purchased': 0}
-                dict_collect.update(dict_append)
-
-        dict_collect_list += [dict_collect]
-        if i%100==0:
-            print(f"finish {i}")
-    df_collect = pd.DataFrame(dict_collect_list)
-    return df_collect
-
-def binning2(data, binwidth, start=None, end=None, xlabel='value', ylabel='probability density', show=True, density=True):
-    if start==None:
-        start = min(data)
-    if end == None:
-        end = max(data)
-    bin_edge = np.arange(start, end+1, binwidth)
-    center = np.arange(start+binwidth/2, end-binwidth/2+1, binwidth)
-    fig, ax = plt.subplots(figsize=(10, 8))
-    pd, edges, patches = plt.hist(data, bins=bin_edge, density=density)
-    ax.bar(center, pd, width=binwidth, color="silver", edgecolor="white")
-    ax.set_xlabel(f'{xlabel}', fontsize=22)
-    ax.set_ylabel(f'{ylabel}', fontsize=22)
-    if show==False:
-        plt.close(fig)
-    return pd, center, fig, ax
-
-def visualization_feature(df_collect, feature='pageviews', binwidth=1, bin_start=0, bin_end=50, y_low=None, y_high=None):
-    feature_values_purchased = np.array(df_collect[df_collect['is_purchased']==1][feature]).astype('int')
-    pd1, center1, fig, ax = binning2(feature_values_purchased, binwidth=binwidth, start=bin_start, end=bin_end, show=False)
-
-    feature_values_not_purchased = np.array(df_collect[df_collect['is_purchased']==0][feature]).astype('int')
-    pd0, center0, fig, ax = binning2(feature_values_not_purchased, binwidth=binwidth, start=bin_start, end=bin_end, show=False)
-
-    fig, ax = plt.subplots(figsize=(10, 8))
-    ax.bar(center0, pd0, width=binwidth, color="blue", edgecolor="white", alpha=0.5)
-    ax.bar(center1, pd1, width=binwidth, color="red", edgecolor="white", alpha=0.5)
-    ax.set_xlabel(f'{feature}', fontsize=22)
-    ax.set_ylabel(f'probability density', fontsize=22)
-    plt.xlim([bin_start, bin_end])
-    if y_low!=None and y_high!=None:
-        plt.ylim([y_low, y_high])
-    plt.show()
-
-
-### normalize to mean = 0, std = 1
-def normalize_data(data):
-    data = np.array(data)
-    data_nor = []
-    for datum in data.T:
-        mean = np.mean(datum)
-        std = np.std(datum, ddof=1)
-        datum_nor = (datum-mean)/std
-        data_nor += [datum_nor]
-    return np.nan_to_num(np.array(data_nor).T)
-
-
-def append_purchased_column(df, uuid_purchased):
-    df_collect = df.copy()
-    is_purchased_list = [1 if row['uuid'] in uuid_purchased else 0 for i,row in df_collect.iterrows()]
-    df_collect['is_purchased'] = is_purchased_list
-    return df_collect
-
-
-
 if __name__ == "__main__":
     web_id = "nineyi11"
-    date_utc8_start = "2022-01-30"
-    date_utc8_end = "2022-01-30"
+    date_utc8_start = "2022-02-02"
+    date_utc8_end = "2022-02-03"
+    tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end, use_db=True)
 
-    tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
+    # df = tracking.get_df_from_db('purchase')
+
 
     # # df_loaded = tracking.df_loaded
     # # df_purchased = tracking.df_purchased
@@ -610,7 +604,7 @@ if __name__ == "__main__":
     # # df_leaved = tracking.df_leaved
     #
     # # df_loaded['date_time'] = [datetime.datetime.utcfromtimestamp(ts/1000)+datetime.timedelta(hours=8) for ts in df_loaded['timestamp']]
-    data_list_filter = filterListofDictByDict(tracking.data_list, dict_criteria={"event_type":"addCart", "web_id":'nineyi11'}) #"web_id":"nineyi11"
+    # data_list_filter = filterListofDictByDict(tracking.data_list, dict_criteria={"event_type":"addCart", "web_id":'nineyi11'}) #"web_id":"nineyi11"
     #
     # ## timeout
     # query = MySqlHelper.generate_update_SQLquery(tracking.df_timeout, 'clean_event_timeout')
