@@ -85,8 +85,9 @@ class TrackingParser:
         return df
 
     @timing
-    def get_df_from_db(self, event_type):
-        columns = self._get_df_event_col(event_type)
+    def get_df_from_db(self, event_type, columns=None):
+        if columns==None:
+            columns = self._get_df_event_col(event_type)
         table = self._get_event_table(event_type)
         query = f"""SELECT {','.join(columns)} FROM {table} WHERE date_time BETWEEN '{self.date_utc8_start}' and '{self.date_utc8_end}' 
                     and web_id='{self.web_id}'"""
@@ -589,10 +590,14 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "nineyi11"
-    date_utc8_start = "2022-02-02"
-    date_utc8_end = "2022-02-03"
-    tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end, use_db=True)
+    web_id = "coway"
+    date_utc8_start = "2022-02-16"
+    date_utc8_end = "2022-02-18"
+    tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
+    data_list = tracking.data_list
+
+    df_addCart = tracking.get_df(web_id, data_list, 'purchase', tracking.dict_settings)
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":"purchase"})
 
     # df = tracking.get_df_from_db('purchase')
 

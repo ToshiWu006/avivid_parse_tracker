@@ -39,23 +39,28 @@ class AmazonS3 :
     def getDateDataFilter(self, date, dict_criteria={'event_type': None,'web_id': None}):
         data_list_filter = []
         objects = self.getDateObjects(date)
+        n_obj = AmazonS3._CountObejects(objects)
         for i,object in enumerate(objects):
             path_object = object.key
             # print(path_object)  ##path of each Object
             data_list = json.loads(self.Read(path_object))
             if i%100==0:
-                print(f"finish loading number of objects, {i}")
+                print(f"finish loading number of objects, {i}/{n_obj}")
             data_list_filter += filterListofDictByDict(data_list, dict_criteria=dict_criteria)
         return data_list_filter
 
     def getDateHourDataFilter(self, date, hour, dict_criteria={'event_type': None,'web_id': None}):
         data_list_filter = []
         objects = self.getDateHourObjects(date, hour)
-        for object in objects:
+        n_obj = AmazonS3._CountObejects(objects)
+
+        for i,object in enumerate(objects):
             path_object = object.key
-            print(path_object)  ##path of each Object
+            # print(path_object)  ##path of each Object
             data_list = json.loads(self.Read(path_object))
-            print(f"finish loading {path_object}")
+            if i%100==0:
+                print(f"finish loading number of objects, {i}/{n_obj}")
+            # print(f"finish loading {path_object}")
             data_list_filter += filterListofDictByDict(data_list, dict_criteria=dict_criteria)
         return data_list_filter
 
@@ -193,8 +198,10 @@ if __name__ == "__main__":
     ## test for uploading
     # AmazonS3('elephants3')._upload_file('/home/clare/Desktop/parse_tracker/s3data/click_count_total.png', 'tracker')
     # path = '/home/clare/Desktop/parse_tracker/s3data/2022/01/27/00/rawData.pickle'
-    AmazonS3('elephants3').upload_tracker_data(datetime_utc0='2022-01-27 01:00:00')
+    # AmazonS3('elephants3').upload_tracker_data(datetime_utc0='2022-01-27 01:00:00')
 
+    # data_list = AmazonS3('elephants3').getDateDataFilter('2022-02-16',{'behavior_type': 'likrEventJob','web_id': 'coway'})
+    data_list = AmazonS3('elephants3').getDateHourDataFilter('2022-02-16', 12,{'behavior_type': 'likrEventJob','web_id': 'coway'})
 
 
     # with open('data_list.pickle', 'wb') as f:

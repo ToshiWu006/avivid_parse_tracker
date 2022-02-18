@@ -1,5 +1,9 @@
-from db.mysqlconnector import MysqlConnector
-from db.logger import Logger
+# from db import MysqlConnector
+# from db import Logger
+# from db import logger
+
+from .logger import Logger
+from .mysqlconnector import MysqlConnector
 from basic import logging_channels
 from sqlalchemy import create_engine, Table, MetaData, insert
 from sqlalchemy import Column, Integer, String, DATETIME
@@ -184,6 +188,26 @@ class MySqlHelper:
         print(f"auto-generating SQL script, \n{query}")
         return query
 
+    #     query = f"UPDATE cdp_tracking_settings SET web_id=:web_id,avg_shipping_price=:avg_shipping_price,avg_total_price=:avg_total_price WHERE web_id=:web_id"
+    @staticmethod
+    def generate_updateTable_SQLquery(table_name, update_col_list, where_col_list):
+        query = f"UPDATE {table_name} SET "
+        # query = "REPLACE INTO google_search_console_device (web_id, clicks, impressions, position, device, date) VALUES (:web_id, :clicks, :impressions, :position, :device, :date)"
+        for i,col in enumerate(update_col_list):
+            if i == len(update_col_list) - 1:
+                query += f"{col}=:{col}"
+            else:
+                query += f"{col}=:{col},"
+        query += " WHERE "
+        for i,col in enumerate(where_col_list):
+            if i == len(where_col_list) - 1:
+                query += f"{col}=:{col}"
+            else:
+                query += f"{col}=:{col} AND "
+        print(f"auto-generating SQL script, \n{query}")
+        return query
+
+
 ## unit test
 if __name__ == '__main__':
     query = f"""
@@ -199,4 +223,6 @@ if __name__ == '__main__':
     df['score_damerau'] = 1  # 1
     df['weight_cosine'] = 1  # 1
 
-    MySqlHelper("roas_report").ExecuteUpdate(query, df.to_dict('records'))
+    query2 = MySqlHelper.generate_updateTable_SQLquery('seo_sim_products', ['keyword_ecom', 'product_id', 'title', 'score',
+                                     'score_damerau', 'weight_cosine'], ['web_id', 'keyword_gtrend'])
+    # MySqlHelper("roas_report").ExecuteUpdate(query, df.to_dict('records'))

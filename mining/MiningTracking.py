@@ -13,10 +13,78 @@ from sklearn.metrics import confusion_matrix
 from sklearn.metrics import roc_curve
 from sklearn import metrics
 
+"""
+protocol:
+    ## 0.get clean data according to 
+    ## 1.train model
+    ## 2.compute probability
+    ## 3.compute upper bound at given lower bound
+    ## 4-1.predict 0 or 1
+    ## 4-2.precision and estimate n_coupon at a day
+    ## 5.confusion matrix
+    ## 6.ROC curve
+    ## 7.build model to be saved
+"""
+
 
 class MiningTracking:
+    @staticmethod
+    def get_clean_data(web_id, date_utc8_start, date_utc8_end, keys_collect=None):
+        tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
+        df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+        if keys_collect==None:
+            # keys_collect = ['uuid', 'session_id', 'url_last', 'url_now', 'timestamp',
+            #                 'device', 'pageviews', 'time_pageview_total', 'landing_count', 'click_count_total',
+            #                 'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth',
+            #                 'is_purchased',
+            #                 'max_time_no_move_last', 'max_time_no_scroll_last', 'max_time_no_click_last', 'is_addCart',
+            #                 'is_removeCart']
+            keys_collect = ['uuid', 'session_id', 'timestamp', 'pageviews', 'time_pageview_total',
+                            'click_count_total', 'is_addCart', 'is_removeCart', 'is_purchased']
+        df_loaded, df_purchased, df_addCart, df_removeCart = clean_df_uuid(df_loaded, df_purchased, df_addCart,
+                                                                           df_removeCart)
+        df_clean = append_3actions_by_uuid_session(df_loaded, df_purchased, df_addCart, df_removeCart, keys_collect)
+        return df_clean
 
-    def train_logistic(self, df, features_select, power_features=None, test_size=0.3, random_state=25):
+    @staticmethod
+    @timing
+    def fetch_training_data(web_id, date_utc8_start, date_utc8_end, keys_collect=None):
+        if keys_collect == None:
+            keys_collect = ['uuid', 'session_id', 'timestamp', 'pageviews', 'time_pageview_total',
+                            'click_count_total']
+        df_loaded = MiningTracking.fetch_event_data(web_id, date_utc8_start, date_utc8_end, 'load', keys_collect)
+        df_purchased = MiningTracking.fetch_event_data(web_id, date_utc8_start, date_utc8_end, 'purchase', keys_collect)
+        df_addCart = MiningTracking.fetch_event_data(web_id, date_utc8_start, date_utc8_end, 'addCart', keys_collect)
+        df_removeCart = MiningTracking.fetch_event_data(web_id, date_utc8_start, date_utc8_end, 'removeCart', keys_collect)
+
+        df_loaded, df_purchased, df_addCart, df_removeCart = clean_df_uuid(df_loaded, df_purchased, df_addCart,
+                                                                           df_removeCart)
+        keys_collect += ['is_addCart', 'is_removeCart', 'is_purchased']
+        df_clean = append_3actions_by_uuid_session(df_loaded, df_purchased, df_addCart, df_removeCart, keys_collect)
+
+        return df_clean
+
+
+    @staticmethod
+    @timing
+    def fetch_event_data(web_id, date_utc8_start, date_utc8_end, event_type, keys_collect):
+        table_dict = {'load':'clean_event_load', 'addCart':'clean_event_addCart', 'removeCart':'clean_event_removeCart',
+                      'leave':'clean_event_leave', 'purchase':'clean_event_purchase', 'timeout':'clean_event_timeout'}
+        if event_type in table_dict.keys():
+            table = table_dict[event_type]
+            query = f"""
+                    SELECT {','.join(keys_collect)} FROM {table}
+                    WHERE date_time BETWEEN '{date_utc8_start}' and '{date_utc8_end}' and web_id='{web_id}'
+                    """
+            print(query)
+            data = MySqlHelper('tracker').ExecuteSelect(query)
+            df = pd.DataFrame(data, columns=keys_collect)
+            return df
+        else:
+            print('not valid even_type')
+            return pd.DataFrame()
+
+    def train_logistic(self, df, features_select, power_features=None, is_train_test_split=True, test_size=0.3, random_state=25):
         # features_select = ['pageviews', 'time_pageview_total', 'click_count_total', 'is_addCart', 'is_removeCart']
         # features_select = ['pageviews', 'time_pageview_total', 'click_count_total']
         features_select = ['uuid'] + features_select
@@ -29,11 +97,24 @@ class MiningTracking:
             for i,power in enumerate(power_features, 1):
                 X[:, i] = pow(X[:, i], power)
         y = np.array(df['is_purchased']).astype('int')
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
+        if is_train_test_split:
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
+            ## ignore uuid column
+            model = LogisticRegression(random_state=0).fit(X_train[:,1:], y_train)
+            self.df_train, self.df_test = pd.DataFrame(data=X_train, columns=features_select), pd.DataFrame(data=X_test, columns=features_select)
+            self.df_train['is_purchased'], self.df_test['is_purchased'] = y_train, y_test
+        else:
+            X_train, y_train = X, y
+            # X_test, y_test = X, y
+            ## ignore uuid column
+            model = LogisticRegression(random_state=0).fit(X_train[:, 1:], y_train)
+            self.df_train = pd.DataFrame(data=X_train, columns=features_select)
+            self.df_train['is_purchased'] = y_train
+
         ## ignore uuid column
-        model = LogisticRegression(random_state=0).fit(X_train[:,1:], y_train)
-        self.df_train, self.df_test = pd.DataFrame(data=X_train, columns=features_select), pd.DataFrame(data=X_test, columns=features_select)
-        self.df_train['is_purchased'], self.df_test['is_purchased'] = y_train, y_test
+        # model = LogisticRegression(random_state=0).fit(X_train[:,1:], y_train)
+        # self.df_train, self.df_test = pd.DataFrame(data=X_train, columns=features_select), pd.DataFrame(data=X_test, columns=features_select)
+        # self.df_train['is_purchased'], self.df_test['is_purchased'] = y_train, y_test
 
         self.features_select = features_select[1:]
         self.coeff = model.coef_
@@ -99,6 +180,9 @@ class MiningTracking:
         else:
             return df[feature_list].corr()[corr_with][:]
 
+    @staticmethod
+    def get_precision(df):
+        return df.query("is_purchased==1&predict==1").shape[0] / df.query("predict==1").shape[0]
 
 
 
@@ -314,7 +398,8 @@ def append_3actions_by_uuid_session(df_loaded, df_purchased, df_addCart, df_remo
     df_collect2 = append_action_session_column(df_collect2, dict_uuid_session_addCart, col_name='is_addCart')
     df_collect2 = append_action_session_column(df_collect2, dict_uuid_session_removeCart, col_name='is_removeCart')
 
-    df_collect_clean2 = df_collect2[keys_collect][df_collect2['landing_count']>0].sort_values(by=['uuid', 'timestamp'])
+    # df_collect_clean2 = df_collect2[keys_collect][df_collect2['landing_count']>0].sort_values(by=['uuid', 'timestamp'])
+    df_collect_clean2 = df_collect2[keys_collect].sort_values(by=['uuid', 'timestamp'])
     df_collect_group2 = df_collect_clean2.groupby(["uuid", "session_id"]).last().reset_index()
     return df_collect_group2
 
@@ -338,41 +423,56 @@ def append_3actions_by_uuid(df_loaded, df_purchased, df_addCart, df_removeCart, 
 
 
 
+
+@timing
+def fetch_mining_settings(web_id):
+    query = f"SELECT test_size,n_day_mining,lower_bound,model_key,n_weight FROM cdp_tracking_settings where web_id='{web_id}'"
+    data = MySqlHelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
+    test_size, n_day, lower_bound, features_join, n_weight = data[0]
+    features_select = features_join.split(',')
+    return test_size, n_day, lower_bound, features_select, n_weight
+
+
+
 ## main for mining tracker data
 if __name__ == "__main__":
     ## settings
     web_id = "nineyi11"
-    date_utc8_start = "2022-02-01"
-    date_utc8_end = "2022-02-04"
-    n_day = 4
-    test_size = 0.4 ## 20% as testing set
-    lower_bound = 0.4 ## lower bound probability of prediction of purchase
+    ## settings
+    test_size, n_day, lower_bound, features_select, n_weight = fetch_mining_settings(web_id)
+    ## left yesterday as testing set, use yesterday-1-n_day ~ yesterday-1
+    datetime_utc8_yesterday = datetime.datetime.utcnow()+datetime.timedelta(hours=8)-datetime.timedelta(days=1)
+    date_utc8_start = datetime_to_str((datetime_utc8_yesterday-datetime.timedelta(days=n_day-1+1)).date())
+    date_utc8_end = datetime_to_str((datetime_utc8_yesterday - datetime.timedelta(days=1)).date())
+    # get number of coupons
     n_coupon_per_day = 50
-    features_select = ['pageviews', 'time_pageview_total', 'click_count_total', 'is_addCart', 'is_removeCart']
-    features_js = ['ps', 't_p_t', 'c_c_t', 'i_ac', 'i_rc']
-
+    # n_coupon_per_day *= n_weight
     ## get clean data
-    tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
-    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+    keys_collect = ['uuid', 'session_id', 'timestamp', 'pageviews', 'time_pageview_total',
+                    'click_count_total']
+    ## use db
+    # datetime_utc8_yesterday = datetime.datetime.utcnow()+datetime.timedelta(hours=8)-datetime.timedelta(days=1)
+    # date_utc8_start = datetime_to_str((datetime_utc8_yesterday-datetime.timedelta(days=n_day)).date())
+    # date_utc8_end = datetime_to_str(datetime_utc8_yesterday.date())
+    # df_collect_group = MiningTracking.fetch_training_data(web_id, date_utc8_start, date_utc8_end, keys_collect)
+    ## use local
+    datetime_utc8_yesterday = datetime.datetime.utcnow()+datetime.timedelta(hours=8)-datetime.timedelta(days=1)
+    date_utc8_start = datetime_to_str((datetime_utc8_yesterday-datetime.timedelta(days=n_day-1)).date())
+    date_utc8_end = datetime_to_str(datetime_utc8_yesterday.date())
+    df_collect_group = MiningTracking.get_clean_data(web_id, date_utc8_start, date_utc8_end)
 
-    keys_collect = ['uuid', 'session_id', 'url_last', 'url_now', 'timestamp',
-                    'device', 'pageviews', 'time_pageview_total', 'landing_count', 'click_count_total',
-                    'max_pageviews', 'max_time_pageview', 'max_time_pageview_total', 'max_scroll_depth', 'is_purchased',
-                    'max_time_no_move_last','max_time_no_scroll_last','max_time_no_click_last','is_addCart', 'is_removeCart']
-    df_loaded, df_purchased, df_addCart, df_removeCart = clean_df_uuid(df_loaded, df_purchased, df_addCart, df_removeCart)
-    df_collect_group = append_3actions_by_uuid_session(df_loaded, df_purchased, df_addCart, df_removeCart, keys_collect)
-
-    corr = MiningTracking.check_correlation(df_collect_group, corr_with='is_purchased')
-
-    model = MiningTracking()
+    # df_collect_group = MiningTracking.get_clean_data(web_id, date_utc8_start, date_utc8_end)
 
     ## 1.train
+    model = MiningTracking()
     # model.train_logistic(df_collect_group, features_select, [1, 0.5, 1, 1, 1], test_size=test_size)
-    model.train_logistic(df_collect_group, features_select, [1, 1, 1, 1, 1], test_size=test_size)
+    model.train_logistic(df_collect_group, features_select, [1, 1, 1, 1, 1], test_size=test_size, is_train_test_split=False)
 
     ## 2.compute probability
     model.predict_prob(model.df_test, features_select, model.coeff, model.intercept, inplace=True)
     model.predict_prob(model.df_train, features_select, model.coeff, model.intercept, inplace=True)
+
+
     ## 3.compute upper bound at given lower bound
     n_cum, prob = np.histogram(np.array(model.df_test.query(f"prob>{lower_bound}")['prob']), bins=50)
     n_cum_weight = n_cum/test_size/n_day ## normalize to traffic of a day
@@ -380,7 +480,7 @@ if __name__ == "__main__":
 
     poly_coeff = np.polyfit(x=cumulative, y=prob[:-1], deg=4)
     equation = np.poly1d(poly_coeff)
-    upper_bound = equation(n_coupon_per_day)
+    upper_bound = equation(n_coupon_per_day*n_weight)
     print(f"result of selecting probability between {lower_bound:.3f} and {upper_bound:.3f}")
 
     plt.figure(figsize=(10,8))
@@ -390,11 +490,13 @@ if __name__ == "__main__":
     plt.ylabel('set upper bound at given lower bound')
     plt.show()
 
-    ## 4.predict 0 or 1
+    ## 4-1.predict 0 or 1
     model.predict(model.df_test, lower=lower_bound, upper=upper_bound, inplace=True)
     model.predict(model.df_train, lower=lower_bound, upper=upper_bound, inplace=True)
+    ## 4-2.precision and estimate n_coupon at a day
+    precision = model.df_test.query("is_purchased==1&predict==1").shape[0] / model.df_test.query("predict==1").shape[0]
+    n_coupon_estimate = int(len(set(model.df_test.query(f"predict==1")['uuid']))/test_size/n_day)
 
-    n_coupon = len(set(model.df_test.query(f"predict==1")['uuid']))/test_size/n_day
     ## 5.confusion matrix
     model.get_confusion_matrix(np.array(model.df_test['is_purchased']), np.array(model.df_test['predict']))
     model.get_confusion_matrix(np.array(model.df_train['is_purchased']), np.array(model.df_train['predict']))
@@ -409,17 +511,16 @@ if __name__ == "__main__":
     df_model = pd.DataFrame()
     df_model['web_id'] = [web_id]
     # df_model['model_type'] = ['logistic']
-    df_model['model_key'] = [','.join(features)]
-    df_model['model_key_js'] = [','.join(features_js)]
+    # df_model['model_key'] = [','.join(features)]
+    # df_model['model_key_js'] = [','.join(features_js)]
     df_model['model_value'] = [','.join([f"{coeff[0,i]:.5f}" for i in range(coeff.shape[1])])]
     df_model['model_intercept'] = [float(intercept)]
     df_model['upper_bound'] = [upper_bound]
-
-    ## update model parameters
-    query = MySqlHelper.generate_insertDup_SQLquery(df_model, 'cdp_tracking_settings', list(df_model.columns)[1:])
-    MySqlHelper("rheacache-db0", is_ssh=True).ExecuteUpdate(query, df_model.to_dict('records'))
-
-
+    df_model['model_precision'] = [precision]
+    df_model['n_coupon_estimate'] = [n_coupon_estimate]
+    # ## update model parameters
+    # query = MySqlHelper.generate_insertDup_SQLquery(df_model, 'cdp_tracking_settings', list(df_model.columns)[1:])
+    # MySqlHelper("rheacache-db0", is_ssh=True).ExecuteUpdate(query, df_model.to_dict('records'))
 
 
     # ## PCA, data visualization
