@@ -66,8 +66,8 @@ def main_import_tracker(web_id, date_utc8):
     save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased)
     ## save statistics to table, clean_event_stat
     df_stat = get_tracker_statistics(web_id, date_utc8, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased)
-    df_stat['n_uuid_load_purchased_before'] = len(set(df_loaded.query("is_purchased_before==1")['uuid']))
-    df_stat['n_uuid_purchase_purchased_before'] = len(set(df_purchased.query("is_purchased_before==1")['uuid']))
+    df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(set(df_loaded.query("is_purchased_before==1")['uuid']))
+    df_stat['n_uuid_purchase_purchased_before'] = 0 if df_purchased.shape[0] == 0 else len(set(df_purchased.query("is_purchased_before==1")['uuid']))
     save_tracker_statistics(df_stat)
     return df_stat
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     date_utc8 = datetime_to_str((datetime.datetime.utcnow()+datetime.timedelta(hours=8)-datetime.timedelta(days=1)).date())
     # date_utc8 = '2022-02-21'
     web_id_all = fetch_enable_analysis_web_id()
-    # web_id_all = ['nineyi11']
+    # web_id_all = ['nineyi40269']
     for web_id in web_id_all:
         df_stat = main_import_tracker(web_id, date_utc8)
 
