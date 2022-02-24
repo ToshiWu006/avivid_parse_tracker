@@ -1,5 +1,6 @@
 from s3_parser import AmazonS3, TrackingParser
-from basic import datetime_to_str, timing, logging_channels, datetime_range, filterListofDictByDict
+from db import MySqlHelper
+from basic import datetime_to_str, to_datetime, timing, logging_channels, datetime_range, filterListofDictByDict
 from definitions import ROOT_DIR
 import datetime, os, pickle
 import shutil
@@ -14,6 +15,22 @@ def collectLastHour():
     s3 = AmazonS3()
     data_list_filter = s3.dumpDateHourDataFilter(date, hour, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
     return data_list_filter, datetime_lastHour
+
+# def collectLastHour_cleanData():
+#     datetime_lastHour = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
+#     # date = datetime_to_str(datetime_lastHour, pattern="%Y-%m-%d")
+#     # hour = datetime_to_str(datetime_lastHour, pattern="%H")
+#     s3 = AmazonS3()
+#
+#     root_folder = datetime_to_str(to_datetime(datetime_lastHour, "%Y-%m-%d %H:%M:%S"), pattern="%Y/%m/%d/%H")
+#     # sub_folder = datetime_to_str(to_datetime(f'{date}-{hour}', "%Y-%m-%d-%H"), '%H')
+#     sub_folder_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase'] ## event_type
+#     for sub_folder in sub_folder_list:
+#         path_folder = os.path.join(ROOT_DIR, "s3data", root_folder, sub_folder)
+#         filename = "cleanData.pickle"
+#         df =
+#         s3.PickleDump(data_list_filter, path_folder, filename)
+
 
 @logging_channels(['clare_test'])
 @timing
@@ -71,18 +88,24 @@ def get_a_day_file_list(date_utc0):
 #             data_list = pickle.load(f)
 #     return data_list
 
+@logging_channels(['clare_test'])
+@timing
+def save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_discardCoupon):
+    db = 'tracker'
+    ## sendCoupon events
+    MySqlHelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000)
+    ## acceptCoupon events
+    MySqlHelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000)
+    ## discardCoupon events
+    MySqlHelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
+
 if __name__ == "__main__":
     ## load data from s3
     data_list_filter, datetime_lastHour = collectLastHour()
-
     ## save collection to s3 every hour
     AmazonS3('elephants3').upload_tracker_data(datetime_utc0=datetime_lastHour)
-
-    ## save to db
-    # datetime_utc8 = datetime_lastHour+datetime.timedelta(hours=8)
-    # date_utc8 = datetime.datetime.strftime(datetime_utc8, '%Y/%m/%d')
-    # hour_utc8 = datetime.datetime.strftime(datetime_utc8, '%H')
-    # TrackingParser.save_raw_event_table(data_list_filter, date_utc8, hour_utc8)
-
+    ## save three coupon events to db including drop_duplicates
+    df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser().get_three_coupon_events_df(web_id=None, data_list=data_list_filter, use_db=False)
+    save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_discardCoupon)
     ## delete folder at today_utc0-n
     delete_expired_folder(30)

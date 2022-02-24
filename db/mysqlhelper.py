@@ -19,7 +19,7 @@ class MySqlHelper:
         self.is_ssh = is_ssh
 
     @staticmethod
-    def ExecuteUpdatebyChunk(df, db, table, chunk_size=100000):
+    def ExecuteUpdatebyChunk(df, db, table, chunk_size=100000, is_ssh=False):
         """
         iteratively update sql by chunk_size
 
@@ -41,7 +41,7 @@ class MySqlHelper:
             n = int(math.ceil(len(dict_list)/chunk_size))
             if n<=1: ## directly import all
                 print(f"size {len(dict_list)}, directly import all data to sql table")
-                MySqlHelper(db).ExecuteUpdate(query, dict_list)
+                MySqlHelper(db, is_ssh=is_ssh).ExecuteUpdate(query, dict_list)
             else:
                 # print(f"size {len(dict_list)}, import {n} times")
                 for i in range(n):
@@ -49,11 +49,11 @@ class MySqlHelper:
                     if i==n-1: ## last round
                         data = dict_list[i*chunk_size:]
                         # print(data)
-                        MySqlHelper(db).ExecuteUpdate(query, data)
+                        MySqlHelper(db, is_ssh=is_ssh).ExecuteUpdate(query, data)
                     else:
                         data = dict_list[i*chunk_size:(i+1)*chunk_size]
                         # print(data)
-                        MySqlHelper(db).ExecuteUpdate(query, data)
+                        MySqlHelper(db, is_ssh=is_ssh).ExecuteUpdate(query, data)
 
     def ExecuteDelete(self, query, disconnect=False):
         '''
