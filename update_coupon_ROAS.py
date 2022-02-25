@@ -49,7 +49,7 @@ def fetch_coupon_cost(web_id, coupon_type, coupon_amount):
 
 
 @timing
-def fetch_update_revenue_cost(coupon_id):
+def fetch_update_revenue_cost(coupon_id, coupon_cost):
     query = f"""
     SELECT 
         sum(temp.total_price) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost
@@ -78,8 +78,8 @@ def fetch_update_revenue_cost(coupon_id):
 
 @logging_channels(['clare_test'])
 def main_update_addFan_ROAS(web_id, coupon_id, coupon_type, coupon_amount):
-    fetch_coupon_cost(web_id, coupon_type, coupon_amount)
-    df_ROAS = fetch_update_revenue_cost(coupon_id)
+    coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
+    df_ROAS = fetch_update_revenue_cost(coupon_id, coupon_cost)
     return df_ROAS
 
 if __name__ == "__main__":
