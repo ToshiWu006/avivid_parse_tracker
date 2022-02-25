@@ -44,7 +44,7 @@ class AmazonS3 :
             path_object = object.key
             # print(path_object)  ##path of each Object
             data_list = json.loads(self.Read(path_object))
-            if i%100==0:
+            if i%10==0:
                 print(f"finish loading number of objects, {i}/{n_obj}")
             data_list_filter += filterListofDictByDict(data_list, dict_criteria=dict_criteria)
         return data_list_filter
@@ -58,7 +58,7 @@ class AmazonS3 :
             path_object = object.key
             # print(path_object)  ##path of each Object
             data_list = json.loads(self.Read(path_object))
-            if i%100==0:
+            if i%10==0:
                 print(f"finish loading number of objects, {i}/{n_obj}")
             # print(f"finish loading {path_object}")
             data_list_filter += filterListofDictByDict(data_list, dict_criteria=dict_criteria)

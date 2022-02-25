@@ -38,9 +38,9 @@ class TrackingParser:
         if web_id!=self.web_id:
             ## change to use dict_settings from web_id instead of self.web_id
             dict_settings = self.fetch_parse_key_settings(web_id)
-        df_loaded = self.get_df_from_db('load') if use_db else self.get_df(web_id, data_list, 'load', dict_settings)
-        df_leaved = self.get_df_from_db('leave') if use_db else self.get_df(web_id, data_list, 'leave', dict_settings)
-        df_timeout = self.get_df_from_db('timeout') if use_db else self.get_df(web_id, data_list, 'timeout', dict_settings)
+        df_loaded = self.get_df_from_db('load') if use_db else self.get_df(web_id, data_list, 'load')
+        df_leaved = self.get_df_from_db('leave') if use_db else self.get_df(web_id, data_list, 'leave')
+        df_timeout = self.get_df_from_db('timeout') if use_db else self.get_df(web_id, data_list, 'timeout')
         df_addCart = self.get_df_from_db('addCart') if use_db else self.get_df(web_id, data_list, 'addCart', dict_settings)
         df_removeCart = self.get_df_from_db('removeCart') if use_db else self.get_df(web_id, data_list, 'removeCart', dict_settings)
         df_purchased = self.get_df_from_db('purchase') if use_db else self.get_df(web_id, data_list, 'purchase', dict_settings)
@@ -588,22 +588,20 @@ class TrackingParser:
         return subset
 
 
-
-
-
 if __name__ == "__main__":
     web_id = "nineyi11"
     date_utc8_start = "2022-02-24"
     date_utc8_end = "2022-02-24"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
-    event_type = "acceptCoupon"
-    # df_addCart = tracking.get_df(web_id, data_list, 'purchase', tracking.dict_settings)
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":event_type})
-    # df = tracking.get_df(web_id, data_list_filter, event_type)
+    # event_type = "acceptCoupon"
+    # # df_addCart = tracking.get_df(web_id, data_list, 'purchase', tracking.dict_settings)
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
+    # # df = tracking.get_df(web_id, data_list_filter, event_type)
 
     df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
     df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
+
     # result = []
     # for data in data_list_filter:
     #     result += tracking.fully_parse_coupon(data)
