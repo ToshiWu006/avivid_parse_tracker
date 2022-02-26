@@ -93,6 +93,7 @@ def get_coupon_events_statistics(date, df_sendCoupon, df_acceptCoupon, df_discar
     for web_id in web_id_list:
         data_dict = {'web_id': web_id, 'date': date}
         for i, df in enumerate(df_list):
+            df = df.query(f"web_id=='{web_id}'")
             if df.shape[0] == 0:
                 n_events, n_uuid = 0, 0
             else:
@@ -199,17 +200,24 @@ if __name__ == "__main__":
     # web_id_all = ['nineyi11']
     date_utc8 = datetime_to_str(datetime_lastHour)
     df_stat_all = pd.DataFrame()
+    # tracking = TrackingParser(None, date_utc8, date_utc8)
     for web_id in web_id_all:
         df_stat = parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter)
         df_stat_all = pd.concat([df_stat_all, df_stat])
+    save_tracker_statistics(df_stat_all)
+
     ## save three coupon events to db including drop_duplicates
-    df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser().get_three_coupon_events_df(web_id=None, data_list=data_list_filter, use_db=False)
-    save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_discardCoupon)
+    # df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour = TrackingParser().get_three_coupon_events_df(web_id=None, data_list=data_list_filter, use_db=False)
+    # save_three_clean_coupon_events_toSQL(df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour)
     ## save to clean_event_stat,
     ## 1. six events statistics
-    save_tracker_statistics(df_stat_all)
-    ## 2. three coupon events statistics
-    df_coupon_stat_all = get_coupon_events_statistics(date_utc8, df_sendCoupon, df_acceptCoupon, df_discardCoupon)
+    # save_tracker_statistics(df_stat_all)
+    ## 2. refresh three coupon events to update statistics today
+    # tracking = TrackingParser(web_id, date_utc8, date_utc8)
+    # df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
+    # df_coupon_stat_all = get_coupon_events_statistics(date_utc8, df_sendCoupon, df_acceptCoupon, df_discardCoupon)
+
+    df_coupon_stat_all = parseSave_couponEvents_collectStat(date_utc8, data_list_filter)
     save_tracker_statistics(df_coupon_stat_all)
     ## delete folder at today_utc0-n
     delete_expired_folder(30)
