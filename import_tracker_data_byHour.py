@@ -129,16 +129,35 @@ def save_tracker_statistics(df_stat):
 
 @logging_channels(['clare_test'])
 @timing
-def parseSave_sixEvents_collectStat(web_id, date_utc8):
-    tracking = TrackingParser(web_id, date_utc8, date_utc8)
+def parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter):
+    # tracking = TrackingParser(web_id, date_utc8, date_utc8)
     ## add six events df to instance
-    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
-    save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased)
+    ## 1. get six df this hour
+    df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour = TrackingParser().get_six_events_df(
+        web_id, data_list=data_list_filter, use_db=False)
+    save_six_clean_events(df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour)
     ## save statistics to table, clean_event_stat
-    df_stat = get_tracker_statistics(web_id, date_utc8, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased)
-    df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(set(df_loaded.query("is_purchased_before==1")['uuid']))
-    df_stat['n_uuid_purchase_purchased_before'] = 0 if df_purchased.shape[0] == 0 else len(set(df_purchased.query("is_purchased_before==1")['uuid']))
+    ## 2. refresh df to update statistics today
+    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = TrackingParser(web_id, date_utc8, date_utc8).get_six_events_df(use_db=False)
+    df_stat = get_tracker_statistics(web_id, date_utc8, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart,
+                                     df_purchased)
+    df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(
+        set(df_loaded.query("is_purchased_before==1")['uuid']))
+    df_stat['n_uuid_purchase_purchased_before'] = 0 if df_purchased.shape[0] == 0 else len(
+        set(df_purchased.query("is_purchased_before==1")['uuid']))
     return df_stat
+
+@logging_channels(['clare_test'])
+@timing
+def parseSave_couponEvents_collectStat(date_utc8, data_list_filter):
+    ## 1. save clean events this hour (data_list_filter)
+    df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour = TrackingParser().get_three_coupon_events_df(web_id=None, data_list=data_list_filter, use_db=False)
+    save_three_clean_coupon_events_toSQL(df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour)
+    ## 2. update clean events statistics today (date_utc8)
+    # tracking = TrackingParser(date_utc8_start=date_utc8, date_utc8_end=date_utc8)
+    df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser(None, date_utc8, date_utc8).get_three_coupon_events_df()
+    df_coupon_stat_all = get_coupon_events_statistics(date_utc8, df_sendCoupon, df_acceptCoupon, df_discardCoupon)
+    return df_coupon_stat_all
 
 @logging_channels(['clare_test'])
 @timing
@@ -181,7 +200,7 @@ if __name__ == "__main__":
     date_utc8 = datetime_to_str(datetime_lastHour)
     df_stat_all = pd.DataFrame()
     for web_id in web_id_all:
-        df_stat = parseSave_sixEvents_collectStat(web_id, date_utc8)
+        df_stat = parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter)
         df_stat_all = pd.concat([df_stat_all, df_stat])
     ## save three coupon events to db including drop_duplicates
     df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser().get_three_coupon_events_df(web_id=None, data_list=data_list_filter, use_db=False)
