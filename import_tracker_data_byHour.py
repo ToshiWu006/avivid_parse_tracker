@@ -200,23 +200,12 @@ if __name__ == "__main__":
     # web_id_all = ['nineyi11']
     date_utc8 = datetime_to_str(datetime_lastHour)
     df_stat_all = pd.DataFrame()
-    # tracking = TrackingParser(None, date_utc8, date_utc8)
     for web_id in web_id_all:
         df_stat = parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter)
         df_stat_all = pd.concat([df_stat_all, df_stat])
     save_tracker_statistics(df_stat_all)
 
-    ## save three coupon events to db including drop_duplicates
-    # df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour = TrackingParser().get_three_coupon_events_df(web_id=None, data_list=data_list_filter, use_db=False)
-    # save_three_clean_coupon_events_toSQL(df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour)
-    ## save to clean_event_stat,
-    ## 1. six events statistics
-    # save_tracker_statistics(df_stat_all)
-    ## 2. refresh three coupon events to update statistics today
-    # tracking = TrackingParser(web_id, date_utc8, date_utc8)
-    # df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
-    # df_coupon_stat_all = get_coupon_events_statistics(date_utc8, df_sendCoupon, df_acceptCoupon, df_discardCoupon)
-
+    ## save three coupon events and coupon statistics
     df_coupon_stat_all = parseSave_couponEvents_collectStat(date_utc8, data_list_filter)
     save_tracker_statistics(df_coupon_stat_all)
     ## delete folder at today_utc0-n

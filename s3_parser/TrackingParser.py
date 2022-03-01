@@ -54,7 +54,7 @@ class TrackingParser:
             web_id = self.web_id
         if data_list==None:
             data_list = self.data_list
-        df_sendCoupon = self.get_df_from_db('sendCoupon') if use_db else self.get_df(web_id, data_list, 'sendCoupon',)
+        df_sendCoupon = self.get_df_from_db('sendCoupon') if use_db else self.get_df(web_id, data_list, 'sendCoupon')
         df_acceptCoupon = self.get_df_from_db('acceptCoupon') if use_db else self.get_df(web_id, data_list, 'acceptCoupon')
         df_discardCoupon = self.get_df_from_db('discardCoupon') if use_db else self.get_df(web_id, data_list, 'discardCoupon')
         return df_sendCoupon, df_acceptCoupon, df_discardCoupon
@@ -99,7 +99,7 @@ class TrackingParser:
         ## sendCoupon, acceptCoupon, discardCoupon
         elif event_type=='sendCoupon' or event_type=='acceptCoupon' or event_type=='discardCoupon':
             for data_dict in data_list_filter:
-                dict_list += self.fully_parse_coupon(data_dict)
+                dict_list += self.fully_parse_coupon(data_dict, event_type)
         else:
             print("not a valid event")
             return pd.DataFrame()  ## early return
@@ -114,6 +114,11 @@ class TrackingParser:
         elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout':
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
+        elif event_type=='sendCoupon':
+            df['model_keys'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_keys']]
+            df['model_parameters'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_parameters']]
+            df['model_X'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_X']]
+
         df.drop_duplicates(subset=self._get_unique_col(event_type), inplace=True)
         df.dropna(inplace=True)
         df = self.clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16})
@@ -204,9 +209,9 @@ class TrackingParser:
 
     ## leaved and timeout event
     @staticmethod
-    def fully_parse_coupon(data_dict):
+    def fully_parse_coupon(data_dict, event_type):
         universial_dict = TrackingParser.parse_rename_universial(data_dict)
-        coupon_info_dict = TrackingParser.parse_rename_coupon_info(data_dict)
+        coupon_info_dict = TrackingParser.parse_rename_coupon_info(data_dict, event_type)
         record_dict = TrackingParser.parse_rename_record_user(data_dict)
         universial_dict.update(coupon_info_dict)
         universial_dict.update(record_dict)
@@ -321,15 +326,23 @@ class TrackingParser:
         return collection_purchase_dict_list
 
     @staticmethod
-    def parse_rename_coupon_info(data_dict):
+    def parse_rename_coupon_info(data_dict, event_type):
         if 'coupon_info' not in data_dict.keys():
             print(f"'coupon_info' not in {data_dict}, return []")
             return []
         dict_object = data_dict['coupon_info']
-        key_list = ['p_p', 'c_t', 'c_d', 'c_c', 'c_st',
-                    'c_ty', 'c_a', 'c_c_t', 'c_c_m', 'l_c']
-        key_rename_list = ['prob_purchase', 'coupon_title', 'coupon_description', 'coupon_code', 'coupon_setTimer',
-                           'coupon_type', 'coupon_amount', 'coupon_customer_type', 'coupon_code_mode', 'link_code']
+        if event_type=='sendCoupon':
+            key_list = ['l_b', 'u_b', 'm_k', 'm_p', 'm_i',
+                        'm_X', 'c_i', 'c_c_t']
+            key_rename_list = ['lower_bound', 'upper_bound', 'model_keys', 'model_parameters', 'model_intercept',
+                               'model_X', 'coupon_id', 'coupon_customer_type']
+        else:
+            key_list = ['p_p', 'c_t', 'c_d', 'c_c', 'c_st',
+                        'c_ty', 'c_a', 'c_c_t', 'c_c_m', 'l_c',
+                        'c_i']
+            key_rename_list = ['prob_purchase', 'coupon_title', 'coupon_description', 'coupon_code', 'coupon_setTimer',
+                               'coupon_type', 'coupon_amount', 'coupon_customer_type', 'coupon_code_mode', 'link_code',
+                               'coupon_id']
         coupon_info_dict = {}
         for key,key_rename in zip(key_list,key_rename_list):
             if key in dict_object.keys():
@@ -590,17 +603,18 @@ class TrackingParser:
 
 if __name__ == "__main__":
     web_id = "nineyi11"
-    date_utc8_start = "2022-02-24"
-    date_utc8_end = "2022-02-24"
+    date_utc8_start = "2022-03-01"
+    date_utc8_end = "2022-03-01"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # event_type = "acceptCoupon"
     # # df_addCart = tracking.get_df(web_id, data_list, 'purchase', tracking.dict_settings)
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'sendCoupon'})
     # # df = tracking.get_df(web_id, data_list_filter, event_type)
 
-    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+    # df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
     df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
+    # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'sendCoupon')
 
     # result = []
     # for data in data_list_filter:
