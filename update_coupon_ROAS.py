@@ -83,7 +83,7 @@ def fetch_update_revenue_cost_n_coupon(coupon_id, coupon_cost, activity_start, a
 def fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end):
     query_sent = f"""
     SELECT
-        COUNT(id) AS coupon_sent
+        COUNT(DISTINCT uuid) AS coupon_sent
     FROM
         tracker.clean_event_sendCoupon
     WHERE
@@ -93,7 +93,7 @@ def fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end):
     print(query_sent)
     query_accept = f"""
     SELECT
-        COUNT(id) AS coupon_accept
+        COUNT(DISTINCT uuid) AS coupon_accept
     FROM
         tracker.clean_event_acceptCoupon
     WHERE
