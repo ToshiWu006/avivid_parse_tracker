@@ -115,6 +115,7 @@ class TrackingParser:
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
         elif event_type=='sendCoupon':
+            df.drop(columns=self._get_drop_col('sendCoupon'), inplace=True)
             df['model_keys'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_keys']]
             df['model_parameters'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_parameters']]
             df['model_X'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_X']]
@@ -333,9 +334,9 @@ class TrackingParser:
         dict_object = data_dict['coupon_info']
         if event_type=='sendCoupon':
             key_list = ['l_b', 'u_b', 'm_k', 'm_p', 'm_i',
-                        'm_X', 'c_i', 'c_c_t']
+                        'm_X', 'c_i', 'c_c_t', 'p_p']
             key_rename_list = ['lower_bound', 'upper_bound', 'model_keys', 'model_parameters', 'model_intercept',
-                               'model_X', 'coupon_id', 'coupon_customer_type']
+                               'model_X', 'coupon_id', 'coupon_customer_type', 'prob_purchase']
         else:
             key_list = ['p_p', 'c_t', 'c_d', 'c_c', 'c_st',
                         'c_ty', 'c_a', 'c_c_t', 'c_c_m', 'l_c',
@@ -577,6 +578,11 @@ class TrackingParser:
                             'time_no_move','time_no_scroll','time_no_click','max_time_no_move','max_time_no_scroll',
                             'max_time_no_scroll_array','max_time_no_scroll_depth_array','max_time_no_scroll_depth','max_time_no_scroll_depth_px',
                             'max_time_no_click','max_scroll_depth_page','time_pageview_total_last']
+        elif event_type=='sendCoupon':
+            drop_col_list = ['time_pageview','scroll_depth','scroll_depth_px','click_count', 'time_no_move',
+                             'time_no_scroll','time_no_click','max_time_no_move','max_time_no_scroll', 'max_time_no_scroll_array',
+                             'max_time_no_scroll_depth_array','max_time_no_scroll_depth','max_time_no_scroll_depth_px', 'max_time_no_click',
+                             'max_scroll_depth_page','time_pageview_total_last']
         return drop_col_list
 
     ## for df.drop_duplicates(subset), can be more than unique key in sql table
@@ -603,8 +609,8 @@ class TrackingParser:
 
 if __name__ == "__main__":
     web_id = "nineyi11"
-    date_utc8_start = "2022-03-01"
-    date_utc8_end = "2022-03-01"
+    date_utc8_start = "2022-03-02"
+    date_utc8_end = "2022-03-02"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # event_type = "acceptCoupon"
