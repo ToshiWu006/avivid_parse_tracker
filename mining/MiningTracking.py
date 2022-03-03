@@ -64,18 +64,25 @@ class MiningTracking:
 
         return df_clean
 
-
+    ## if web_id==None, fetch all web_id
     @staticmethod
     @timing
     def fetch_event_data(web_id, date_utc8_start, date_utc8_end, event_type, keys_collect):
         table_dict = {'load':'clean_event_load', 'addCart':'clean_event_addCart', 'removeCart':'clean_event_removeCart',
                       'leave':'clean_event_leave', 'purchase':'clean_event_purchase', 'timeout':'clean_event_timeout'}
+
         if event_type in table_dict.keys():
             table = table_dict[event_type]
-            query = f"""
-                    SELECT {','.join(keys_collect)} FROM {table}
-                    WHERE date_time BETWEEN '{date_utc8_start}' and '{date_utc8_end}' and web_id='{web_id}'
-                    """
+            if web_id==None or web_id=='default':
+                query = f"""
+                        SELECT {','.join(keys_collect)} FROM {table}
+                        WHERE date_time BETWEEN '{date_utc8_start}' and '{date_utc8_end}'
+                        """
+            else:
+                query = f"""
+                        SELECT {','.join(keys_collect)} FROM {table}
+                        WHERE date_time BETWEEN '{date_utc8_start}' and '{date_utc8_end}' and web_id='{web_id}'
+                        """
             print(query)
             data = MySqlHelper('tracker').ExecuteSelect(query)
             df = pd.DataFrame(data, columns=keys_collect)
