@@ -3,6 +3,7 @@ from definitions import ROOT_DIR
 from db import MySqlHelper
 import datetime, os, pickle, json
 import pandas as pd
+import re
 import numpy as np
 
 class TrackingParser:
@@ -111,6 +112,7 @@ class TrackingParser:
         df['date_time'] = [datetime.datetime.utcfromtimestamp(ts/1000)+datetime.timedelta(hours=8) for ts in df['timestamp']]
         if event_type=='purchase': ## unique key in table
             df.drop(columns=self._get_drop_col('purchase'), inplace=True)
+            self.reformat_shipping_price(df, inplace=True)
         elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout':
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
@@ -439,6 +441,16 @@ class TrackingParser:
         return data_list
 
     @staticmethod
+    def reformat_shipping_price(df, col='shipping_price', inplace=False):
+        if inplace:
+            df[col] = [0 if re.findall("[0-9]", x) == [] else int(x) for x in df[col]]
+        else:
+            df_copy = df.copy()
+            df_copy[col] = [0 if re.findall("[0-9]", x) == [] else int(x) for x in df[col]]
+            return df_copy
+
+
+    @staticmethod
     def get_a_day_file_list(date_utc8):
         if type(date_utc8) == datetime.datetime:
             datetime_utc0 = date_utc8 + datetime.timedelta(hours=-8)
@@ -608,20 +620,26 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "nineyi11"
-    date_utc8_start = "2022-03-02"
-    date_utc8_end = "2022-03-02"
+    web_id = "millerpopcorn"
+    date_utc8_start = "2022-03-03"
+    date_utc8_end = "2022-03-03"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # event_type = "acceptCoupon"
     # # df_addCart = tracking.get_df(web_id, data_list, 'purchase', tracking.dict_settings)
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'sendCoupon'})
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'addCart'})
     # # df = tracking.get_df(web_id, data_list_filter, event_type)
 
-    # df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
-    df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
+    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+    # df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'sendCoupon')
 
+
+
+    # query = MySqlHelper.generate_update_SQLquery(df_purchased, 'table')
+    # MySqlHelper('tracker').ExecuteUpdate(query, df_purchased.to_dict("records"))
+
+    # print(query)
     # result = []
     # for data in data_list_filter:
     #     result += tracking.fully_parse_coupon(data)

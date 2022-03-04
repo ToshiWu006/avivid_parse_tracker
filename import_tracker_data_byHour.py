@@ -219,6 +219,6 @@ if __name__ == "__main__":
     df_coupon_stat_all = parseSave_couponEvents_collectStat(date_utc8, data_list_filter)
     save_tracker_statistics(df_coupon_stat_all)
     ## delete folder at today_utc0-n
-    delete_expired_folder(30)
+    delete_expired_folder(14)
 
 
