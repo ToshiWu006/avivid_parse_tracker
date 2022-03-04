@@ -22,7 +22,7 @@ def logging_channels(channel_name_list):
                 return func(*args, **kwargs)
             except:
                 error = traceback.format_exc()
-                message = f"Error Message: ```{error}```\nTrigger By Function: ```{func.__name__}{args}``` Raise Error in Path: ```{func.__code__.co_filename}```\nPlase Check"
+                message = f"Error Message: ```{error}```\nTrigger By Function: ```{func.__name__}{args[:2]}...``` Raise Error in Path: ```{func.__code__.co_filename}```\nPlase Check"
                 slackBot(channel_name_list).send_message(message)
                 print(message)
         return wrapper
@@ -37,7 +37,7 @@ def logging(func):
             return func(*args, **kwargs)
         except:
             error = traceback.format_exc()
-            message = f"error message: ```{error}```\ntrigger by function: ```{func.__name__}{args}``` raise error in path: ```{func.__code__.co_filename}```\nPlase check"
+            message = f"error message: ```{error}```\ntrigger by function: ```{func.__name__}{args[:2]}...``` raise error in path: ```{func.__code__.co_filename}```\nPlase check"
             slackBot("clare_test").send_message(message)
             print(message)
     return wrapper
