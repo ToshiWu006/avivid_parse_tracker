@@ -88,7 +88,14 @@ def get_coupon_events_statistics(date, df_sendCoupon, df_acceptCoupon, df_discar
     columns = ['n_events_sendCoupon', 'n_uuid_sendCoupon',
                'n_events_acceptCoupon', 'n_uuid_acceptCoupon',
                 'n_events_discardCoupon', 'n_uuid_discardCoupon']
-    web_id_list = list(set(pd.concat([df_sendCoupon['web_id'], df_acceptCoupon['web_id'], df_discardCoupon['web_id']])))
+    web_id_list = []
+    for df in df_list:
+        if df.shape[0]==0:
+            continue
+        else:
+            web_id_list += list(df['web_id'])
+    web_id_list = list(set(web_id_list))
+    # web_id_list = list(set(pd.concat([df_sendCoupon['web_id'], df_acceptCoupon['web_id'], df_discardCoupon['web_id']])))
     df_coupon_stat_all = pd.DataFrame()
     for web_id in web_id_list:
         data_dict = {'web_id': web_id, 'date': date}
@@ -125,8 +132,11 @@ def get_tracker_statistics(web_id, date, df_loaded, df_leaved, df_timeout, df_ad
 @logging_channels(['clare_test'])
 @timing
 def save_tracker_statistics(df_stat):
-    query = MySqlHelper.generate_insertDup_SQLquery(df_stat, 'clean_event_stat', df_stat.columns[1:])
-    MySqlHelper('tracker').ExecuteUpdate(query, df_stat.to_dict('records'))
+    if df_stat.shape[0]!=0:
+        query = MySqlHelper.generate_insertDup_SQLquery(df_stat, 'clean_event_stat', df_stat.columns[1:])
+        MySqlHelper('tracker').ExecuteUpdate(query, df_stat.to_dict('records'))
+    else:
+        print("no available data")
 
 @logging_channels(['clare_test'])
 @timing
