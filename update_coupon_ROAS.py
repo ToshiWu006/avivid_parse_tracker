@@ -5,7 +5,7 @@ import pandas as pd
 @timing
 def fetch_coupon_activity_running():
     query = f"""
-    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, end_time
+    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, date_add(end_time,INTERVAL 1 DAY) as end_time
     FROM addfan_activity WHERE curdate() between start_time and end_time and activity_enable=1 and coupon_enable=1
     and web_id != 'rick'    
     """
@@ -21,7 +21,7 @@ def fetch_coupon_activity_running():
 @timing
 def fetch_coupon_activity_just_expired():
     query = f"""
-    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, end_time
+    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, date_add(end_time,INTERVAL 1 DAY) as end_time2
     FROM addfan_activity WHERE DATE(update_time) between start_time and end_time 
     and DATEDIFF(curdate(), end_time) between 0 and 1
     and activity_enable=1 and coupon_enable=1
@@ -82,39 +82,43 @@ FROM
 
 @timing
 def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, activity_start, activity_end):
+    query = f"""
+            SELECT 
+                IFNULL(SUM(temp.total),0) AS revenue, COUNT(temp.total) * {coupon_cost} AS cost
+            FROM
+                (SELECT 
+                    a.uuid AS uuid,	b.session_id AS session_b, b.total
+                FROM
+                    (SELECT * FROM tracker.clean_event_acceptCoupon 
+                    WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}' 
+                    AND web_id = '{web_id}' AND link_code = '{link_code}') AS a
+                INNER JOIN (SELECT 
+                    uuid, session_id, SUM(product_price * product_quantity) AS total
+                FROM
+                    tracker.clean_event_purchase
+                WHERE
+                    date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                    AND web_id = '{web_id}'
+                GROUP BY uuid , session_id
+                HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b ON a.uuid = b.uuid
+                    AND a.session_id = b.session_id
+                GROUP BY uuid , session_b) AS temp
+    """
     # query = f"""
     # SELECT
     #     sum(temp.total_price) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost
     # FROM
     #     (SELECT
     #         a.uuid AS uuid,
-    #             b.session_id AS session_b,
-    #             a.link_code,
-    #             AVG(b.total_price) AS total_price
+    #         b.session_id AS session_b,
+    #         a.link_code,
+    #         SUM(b.product_price) AS total_price
     #     FROM
-    #         tracker.clean_event_acceptCoupon a
-    #     INNER JOIN tracker.clean_event_purchase b ON a.uuid = b.uuid
+    #         (select * from tracker.clean_event_acceptCoupon where web_id='{web_id}' and link_code = '{link_code}') as a
+    #     INNER JOIN (select * from tracker.clean_event_purchase where web_id='{web_id}' and total_price>{coupon_price_limit}) as b ON a.uuid = b.uuid
     #         AND a.session_id = b.session_id
-    #         AND b.total_price > {coupon_price_limit}
-    #     WHERE
-    #         a.link_code = '{link_code}'
     #     GROUP BY uuid , session_b) AS temp
     # """
-    query = f"""
-    SELECT 
-        sum(temp.total_price) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost
-    FROM
-        (SELECT 
-            a.uuid AS uuid,
-            b.session_id AS session_b,
-            a.link_code,
-            AVG(b.total_price) AS total_price
-        FROM
-            (select * from tracker.clean_event_acceptCoupon where web_id='{web_id}' and link_code = '{link_code}') as a
-        INNER JOIN (select * from tracker.clean_event_purchase where web_id='{web_id}' and total_price>{coupon_price_limit}) as b ON a.uuid = b.uuid
-            AND a.session_id = b.session_id
-        GROUP BY uuid , session_b) AS temp
-    """
     print(query)
     data = MySqlHelper("tracker").ExecuteSelect(query)
     df_ROAS = pd.DataFrame(data, columns=['revenue', 'cost'])
