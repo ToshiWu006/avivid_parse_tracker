@@ -6,7 +6,7 @@ import pandas as pd
 def fetch_coupon_activity_running():
     query = f"""
     SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, date_add(end_time,INTERVAL 1 DAY) as end_time
-    FROM addfan_activity WHERE curdate() between start_time and end_time and activity_enable=1 and coupon_enable=1
+    FROM addfan_activity WHERE curdate() between start_time and end_time and activity_enable=1 and coupon_enable=1 and activity_delete=0
     and web_id != 'rick'    
     """
     print(query)
@@ -24,8 +24,8 @@ def fetch_coupon_activity_just_expired():
     SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, date_add(end_time,INTERVAL 1 DAY) as end_time2
     FROM addfan_activity WHERE DATE(update_time) between start_time and end_time 
     and DATEDIFF(curdate(), end_time) between 0 and 1
-    and activity_enable=1 and coupon_enable=1
-    and web_id != 'rick'    
+    and activity_enable=1 and coupon_enable=1 and activity_delete=0
+    and web_id != 'rick'
     """
     print(query)
     data = MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
@@ -93,13 +93,13 @@ def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost
                     WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}' 
                     AND web_id = '{web_id}' AND link_code = '{link_code}') AS a
                 INNER JOIN (SELECT 
-                    uuid, session_id, SUM(product_price * product_quantity) AS total
+                    uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
                 FROM
                     tracker.clean_event_purchase
                 WHERE
                     date_time BETWEEN '{activity_start}' AND '{activity_end}'
                     AND web_id = '{web_id}'
-                GROUP BY uuid , session_id
+                GROUP BY uuid , session_id, timestamp
                 HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b ON a.uuid = b.uuid
                     AND a.session_id = b.session_id
                 GROUP BY uuid , session_b) AS temp
