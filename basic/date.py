@@ -3,6 +3,12 @@ import socket
 import time
 import numpy as np
 
+
+def curdate(utc=0, pattern='%Y-%m-%d'):
+    date = datetime.datetime.utcnow() + datetime.timedelta(hours=utc)
+    return datetime.datetime.strptime(datetime_to_str(date, pattern), pattern)
+
+
 def to_datetime(date, pattern='%Y-%m-%d'):
     if type(date) == str:
         date = datetime.datetime.strptime(date, pattern)

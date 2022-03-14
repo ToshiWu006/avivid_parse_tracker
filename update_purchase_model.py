@@ -25,20 +25,20 @@ def fetch_update_model_web_id():
 @timing
 def fetch_mining_settings(web_id):
     if web_id==None:
-        query = f"SELECT n_day_testing,n_day_mining,lower_bound,model_key,n_weight FROM cdp_tracking_settings where web_id='default'"
+        query = f"SELECT n_day_testing,n_day_mining,model_key,n_weight FROM cdp_tracking_settings where web_id='default'"
     else:
-        query = f"SELECT n_day_testing,n_day_mining,lower_bound,model_key,n_weight FROM cdp_tracking_settings where web_id='{web_id}'"
+        query = f"SELECT n_day_testing,n_day_mining,model_key,n_weight FROM cdp_tracking_settings where web_id='{web_id}'"
     data = MySqlHelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
-    n_day_testing, n_day_mining, lower_bound, features_join, n_weight = data[0]
+    n_day_testing, n_day_mining, features_join, n_weight = data[0]
     features_select = features_join.split(',')
-    return n_day_testing, n_day_mining, lower_bound, features_select, n_weight
+    return n_day_testing, n_day_mining, features_select, n_weight
 
 @logging_channels(['clare_test'])
 @timing
 def main_update_model(web_id, data_use_db=True, update_db=True, confusion_matrix=False, use_default=False):
     if web_id==None or use_default:
         web_id = 'default'
-    n_day_testing, n_day_mining, lower_bound, features_select, n_weight = fetch_mining_settings(web_id)
+    n_day_testing, n_day_mining, features_select, n_weight = fetch_mining_settings(web_id)
     ## 0.get columns if use db fetching
     keys_collect = ['uuid', 'session_id', 'timestamp', 'pageviews', 'time_pageview_total', 'click_count_total']
     ## left yesterday as testing set, use yesterday-1-n_day ~ yesterday-1
@@ -93,11 +93,11 @@ def main_update_model(web_id, data_use_db=True, update_db=True, confusion_matrix
 if __name__ == "__main__":
     ## settings
     # web_id = "nineyi11"
-    web_id_list = ['default'] # lovingfamily
+    web_id_list = ['94monster'] # lovingfamily
     # web_id_list = fetch_update_model_web_id()
     for web_id in web_id_list:
         ## update model (coefficient and intercept)
-        df_model = main_update_model(web_id, data_use_db=True, update_db=False)
+        df_model = main_update_model(web_id, data_use_db=True, update_db=True, confusion_matrix=True)
 
         # ## settings
         # test_size, n_day, lower_bound, features_select, n_weight = fetch_mining_settings(web_id)

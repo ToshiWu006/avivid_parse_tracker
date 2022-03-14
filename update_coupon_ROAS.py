@@ -1,17 +1,19 @@
 from db import MySqlHelper
-from basic import datetime_to_str, timing, logging_channels
+from basic import datetime_to_str, timing, logging_channels, to_datetime, curdate
 import pandas as pd
-
+import datetime
 @timing
 def fetch_coupon_activity_running():
     query = f"""
-    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, date_add(end_time,INTERVAL 1 DAY) as end_time
+    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, 
+    start_time, date_add(end_time,INTERVAL 1 DAY) as end_time, coupon_total
     FROM addfan_activity WHERE curdate() between start_time and end_time and activity_enable=1 and coupon_enable=1 and activity_delete=0
     and web_id != 'rick'    
     """
     print(query)
     data = MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
-    columns = ['id', 'web_id', 'link_code', 'coupon_limit', 'coupon_type', 'coupon_amount', 'activity_start', 'activity_end']
+    columns = ['id', 'web_id', 'link_code', 'coupon_limit', 'coupon_type',
+               'coupon_amount', 'activity_start', 'activity_end', 'coupon_total']
     coupon_price_limit = [int(d[3].split('limit-bill=')[1]) if d[3].find('limit-bill=')!=-1 else 0 for d in data]
     df_coupon = pd.DataFrame(data, columns=columns).drop(columns=['coupon_limit'])
     df_coupon['coupon_price_limit'] = coupon_price_limit
@@ -21,7 +23,8 @@ def fetch_coupon_activity_running():
 @timing
 def fetch_coupon_activity_just_expired():
     query = f"""
-    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, start_time, date_add(end_time,INTERVAL 1 DAY) as end_time2
+    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, 
+    start_time, date_add(end_time,INTERVAL 1 DAY) as end_time2, coupon_total
     FROM addfan_activity WHERE DATE(update_time) between start_time and end_time 
     and DATEDIFF(curdate(), end_time) between 0 and 1
     and activity_enable=1 and coupon_enable=1 and activity_delete=0
@@ -29,7 +32,8 @@ def fetch_coupon_activity_just_expired():
     """
     print(query)
     data = MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
-    columns = ['id', 'web_id', 'link_code', 'coupon_limit', 'coupon_type', 'coupon_amount', 'activity_start', 'activity_end']
+    columns = ['id', 'web_id', 'link_code', 'coupon_limit', 'coupon_type',
+               'coupon_amount', 'activity_start', 'activity_end', 'coupon_total']
     coupon_price_limit = [int(d[3].split('limit-bill=')[1]) if d[3].find('limit-bill=')!=-1 else 0 for d in data]
     df_coupon = pd.DataFrame(data, columns=columns).drop(columns=['coupon_limit'])
     df_coupon['coupon_price_limit'] = coupon_price_limit
@@ -81,7 +85,7 @@ FROM
 
 
 @timing
-def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, activity_start, activity_end):
+def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, coupon_total, activity_start, activity_end):
     query = f"""
             SELECT 
                 IFNULL(SUM(temp.total),0) AS revenue, COUNT(temp.total) * {coupon_cost} AS cost
@@ -124,9 +128,11 @@ def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost
     df_ROAS = pd.DataFrame(data, columns=['revenue', 'cost'])
     df_ROAS['id'] = [coupon_id]
     coupon_sent, coupon_accept = fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end)
-    df_ROAS[['coupon_sent', 'coupon_accept']] = [[coupon_sent, coupon_accept]]
-    df_ROAS['coupon_used'] = [int(df_ROAS['cost']/coupon_cost)]
-    update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_accept', 'coupon_used']
+    coupon_used = int(df_ROAS['cost']/coupon_cost)
+    df_ROAS[['coupon_sent', 'coupon_accept', 'coupon_used']] = [[coupon_sent, coupon_accept, coupon_used]]
+    days_remain = (to_datetime(activity_end)-curdate(utc=8)).days
+    df_ROAS['avg_n_coupon'] = [(coupon_total-coupon_used)/days_remain]
+    update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
     query_update = MySqlHelper.generate_insertDup_SQLquery(df_ROAS, 'addfan_activity', update_col)
     MySqlHelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query_update, df_ROAS.to_dict('records'))
     return df_ROAS
@@ -160,22 +166,22 @@ def fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end):
 
 
 @logging_channels(['clare_test'])
-def main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, activity_start, activity_end):
+def main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, coupon_total, activity_start, activity_end):
     coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
-    df_ROAS = fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, activity_start, activity_end)
+    df_ROAS = fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, coupon_total, activity_start, activity_end)
     return df_ROAS
 
 if __name__ == "__main__":
     df_coupon = fetch_coupon_activity_running()
     for i,row in df_coupon.iterrows():
-        coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_price_limit = row
-        df_ROAS = main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, activity_start, activity_end)
+        coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
+        df_ROAS = main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, coupon_total, activity_start, activity_end)
 
     ## update ROAS just expired
     df_coupon_just_expired = fetch_coupon_activity_just_expired()
     for i,row in df_coupon_just_expired.iterrows():
-        coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_price_limit = row
-        df_ROAS_expired = main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, activity_start, activity_end)
+        coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
+        df_ROAS_expired = main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, coupon_total, activity_start, activity_end)
 
 
     # df_ROAS = fetch_update_revenue_cost_n_coupon('nineyi11', 13, 'aAX9Qe0IAa', 100, 1000, '2022-02-24', '2022-03-02')
