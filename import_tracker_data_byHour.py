@@ -34,7 +34,6 @@ def delete_expired_folder(n_day=30):
     if os.path.exists(path_folder):
         shutil.rmtree(path_folder)
         print(f"remove folder at {path_folder}")
-
     else:
         print("folder does not exist")
 
@@ -152,6 +151,9 @@ def parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter):
     df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = TrackingParser(web_id, date_utc8, date_utc8).get_six_events_df(use_db=False)
     df_stat = get_tracker_statistics(web_id, date_utc8, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart,
                                      df_purchased)
+    # if df_stat==None:
+    #     print('no statistics')
+    #     return pd.DataFrame()
     df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(
         set(df_loaded.query("is_purchased_before==1")['uuid']))
     df_stat['n_uuid_purchase_purchased_before'] = 0 if df_purchased.shape[0] == 0 else len(
@@ -198,6 +200,49 @@ def save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_disc
     ## discardCoupon events
     MySqlHelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
 
+@logging_channels(['clare_test'])
+@timing
+def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased):
+    web_id_list = list(set(df_loaded['web_id']))
+    df_stat_all = pd.DataFrame()
+    for web_id in web_id_list:
+        data_dict = {'web_id': web_id, 'date': date}
+        df_list = [df_loaded.query(f"web_id=='{web_id}'"), df_leaved.query(f"web_id=='{web_id}'"),
+                   df_timeout.query(f"web_id=='{web_id}'"), df_addCart.query(f"web_id=='{web_id}'"),
+                   df_removeCart.query(f"web_id=='{web_id}'"), df_purchased.query(f"web_id=='{web_id}'")]
+        columns = ['n_events_load', 'n_uuid_load', 'n_events_leave', 'n_uuid_leave', 'n_events_timeout',
+                   'n_uuid_timeout',
+                   'n_events_addCart', 'n_uuid_addCart', 'n_events_removeCart', 'n_uuid_removeCart',
+                   'n_events_purchase', 'n_uuid_purchase']
+        for i, df in enumerate(df_list):
+            if df.shape[0] == 0:
+                n_events, n_uuid = 0, 0
+            else:
+                n_events = df.shape[0]
+                n_uuid = len(set(df['uuid']))
+            data_dict.update({columns[2 * i]: [n_events], columns[2 * i + 1]: [n_uuid]})
+        df_stat = pd.DataFrame.from_dict(data_dict)
+        df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(
+            set(df_loaded.query("is_purchased_before==1")['uuid']))
+        df_stat['n_uuid_purchase_purchased_before'] = 0 if df_purchased.shape[0] == 0 else len(
+            set(df_purchased.query("is_purchased_before==1")['uuid']))
+        df_stat_all = pd.concat([df_stat_all, df_stat])
+    return df_stat_all
+
+@logging_channels(['clare_test'])
+@timing
+def parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter):
+    ## add six events df to instance
+    ## 1. get six df this hour for all web_id at a time
+    df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour = TrackingParser().get_six_events_df_all(data_list_filter)
+    save_six_clean_events(df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour)
+    ## save statistics to table, clean_event_stat
+    ## 2. refresh df to update statistics today
+    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = TrackingParser(None, date_utc8, date_utc8).get_six_events_df_all(use_db=False)
+    df_stat_all = get_tracker_statistics_all(date_utc8, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart,
+                                     df_purchased)
+    return df_stat_all
+
 
 
 if __name__ == "__main__":
@@ -207,18 +252,26 @@ if __name__ == "__main__":
     AmazonS3('elephants3').upload_tracker_data(datetime_utc0=datetime_lastHour)
     ## save six events to db including drop_duplicates (by web_id)
     web_id_all = fetch_enable_analysis_web_id()
-    # web_id_all = ['nineyi11']
+    # web_id_all = ['draimior']
     date_utc8 = datetime_to_str(datetime_lastHour)
-    df_stat_all = pd.DataFrame()
-    for web_id in web_id_all:
-        df_stat = parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter)
-        df_stat_all = pd.concat([df_stat_all, df_stat])
+    df_stat_all = parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter)
     save_tracker_statistics(df_stat_all)
-
     ## save three coupon events and coupon statistics
     df_coupon_stat_all = parseSave_couponEvents_collectStat(date_utc8, data_list_filter)
     save_tracker_statistics(df_coupon_stat_all)
     ## delete folder at today_utc0-n
     delete_expired_folder(14)
+
+    # df_stat_all = pd.DataFrame()
+    # for web_id in web_id_all:
+    #     df_stat = parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter)
+    #     df_stat_all = pd.concat([df_stat_all, df_stat])
+    # save_tracker_statistics(df_stat_all)
+    #
+    # ## save three coupon events and coupon statistics
+    # df_coupon_stat_all = parseSave_couponEvents_collectStat(date_utc8, data_list_filter)
+    # save_tracker_statistics(df_coupon_stat_all)
+    # ## delete folder at today_utc0-n
+    # delete_expired_folder(14)
 
 

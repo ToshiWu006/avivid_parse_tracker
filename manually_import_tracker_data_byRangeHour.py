@@ -1,12 +1,7 @@
 from s3_parser import AmazonS3
-from basic import datetime_to_str, timing, logging_channels, datetime_range, to_datetime
-from definitions import ROOT_DIR
-import datetime, os, pickle
-import shutil
-import argparse
-import pandas as pd
-from import_tracker_data_byHour import fetch_enable_analysis_web_id, parseSave_sixEvents_collectStat
-
+from basic import datetime_to_str, to_datetime
+import argparse, datetime
+from import_tracker_data_byHour import parseSave_couponEvents_collectStat, parseSave_sixEvents_collectStat_all, save_tracker_statistics
 
 
 if __name__ == "__main__":
@@ -31,8 +26,8 @@ if __name__ == "__main__":
         ## save collection to s3 every hour
         AmazonS3('elephants3').upload_tracker_data(datetime_utc0=dt)
         ## save six events to db including drop_duplicates (by web_id)
-        web_id_all = fetch_enable_analysis_web_id()
-        # web_id_all = ['draimior']
         date_utc8 = datetime_to_str(dt)
-        for web_id in web_id_all:
-            parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter)
+        df_stat_all = parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter)
+        save_tracker_statistics(df_stat_all)
+        df_coupon_stat_all = parseSave_couponEvents_collectStat(date_utc8, data_list_filter)
+        save_tracker_statistics(df_coupon_stat_all)
