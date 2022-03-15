@@ -148,6 +148,8 @@ def main_update_purchcase_bound(coupon_id, web_id, avg_n_coupon, data_use_db=Tru
     ## 2.compute probability
     model = MiningTracking()
     model.predict_prob(df_test, features_select, coeff, intercept, inplace=True)
+    lower_bound_limit = model.cal_prob(np.zeros((1,len(coeff))), coeff, intercept)[0]
+
     ## 3.compute upper bound at given lower bound
     if use_fit_cum:
         n_cum, prob = np.histogram(np.array(df_test['prob']), bins=100)
@@ -181,11 +183,15 @@ def main_update_purchcase_bound(coupon_id, web_id, avg_n_coupon, data_use_db=Tru
         # max_n_coupon = int(n_day*0.8)
         if avg_n_coupon * n_weight >= max_n_coupon:
             print(f"{avg_n_coupon * n_weight} excess one day traffic: {max_n_coupon}")
-            lower_bound = df_test_order.iloc[max_n_coupon * n_day_testing - 1]['prob']  ## max coupon
+            lower_bound = df_test_order.iloc[int(max_n_coupon * n_day_testing) - 1]['prob']  ## max coupon
         else:
             print(f"{avg_n_coupon * n_weight} do not excess one day traffic: {max_n_coupon}")
-            lower_bound = df_test_order.iloc[avg_n_coupon * n_day_testing * n_weight - 1]['prob']
-
+            lower_bound = df_test_order.iloc[int(avg_n_coupon * n_day_testing * n_weight) - 1]['prob']
+    if lower_bound < lower_bound_limit:
+        print(f"lower_bound({lower_bound}) <= lower_bound_limit({lower_bound_limit}), use lower_bound_limit*1.1")
+    else:
+        print(f"lower_bound({lower_bound}) > lower_bound_limit({lower_bound_limit}), use lower_bound")
+    lower_bound = lower_bound_limit*1.1 if lower_bound <= lower_bound_limit else lower_bound
     ## 4-1.predict 0 or 1
     model.predict(df_test, lower=lower_bound, upper=1.0, inplace=True)
     ## 4-2.precision and estimate n_coupon at a day
@@ -234,5 +240,5 @@ if __name__ == "__main__":
         coupon_id, web_id, avg_n_coupon = row
         df_activity_param, df_test = main_update_purchcase_bound(coupon_id, web_id, avg_n_coupon,
                                                                  data_use_db=True, update_db=True,
-                                                                 plot_n_cum=True, plot_ROC=True,
+                                                                 plot_n_cum=False, plot_ROC=False,
                                                                  use_fit_cum=False)
