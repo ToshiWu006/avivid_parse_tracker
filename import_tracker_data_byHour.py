@@ -223,9 +223,9 @@ def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCar
             data_dict.update({columns[2 * i]: [n_events], columns[2 * i + 1]: [n_uuid]})
         df_stat = pd.DataFrame.from_dict(data_dict)
         df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(
-            set(df_loaded.query("is_purchased_before==1")['uuid']))
+            set(df_loaded.query(f"web_id=='{web_id}'").query("is_purchased_before==1")['uuid']))
         df_stat['n_uuid_purchase_purchased_before'] = 0 if df_purchased.shape[0] == 0 else len(
-            set(df_purchased.query("is_purchased_before==1")['uuid']))
+            set(df_purchased.query(f"web_id=='{web_id}'").query("is_purchased_before==1")['uuid']))
         df_stat_all = pd.concat([df_stat_all, df_stat])
     return df_stat_all
 
