@@ -125,7 +125,9 @@ class TrackingParser:
         df['date_time'] = [datetime.datetime.utcfromtimestamp(ts/1000)+datetime.timedelta(hours=8) for ts in df['timestamp']]
         if event_type=='purchase': ## unique key in table
             df.drop(columns=self._get_drop_col('purchase'), inplace=True)
-            self.reformat_shipping_price(df, inplace=True)
+            self.reformat_shipping_price(df, col='product_price', inplace=True)
+            self.reformat_shipping_price(df, col='total_price', inplace=True)
+            self.reformat_shipping_price(df, col='shipping_price', inplace=True)
         elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout':
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
@@ -224,7 +226,9 @@ class TrackingParser:
         df['date_time'] = [datetime.datetime.utcfromtimestamp(ts/1000)+datetime.timedelta(hours=8) for ts in df['timestamp']]
         if event_type=='purchase': ## unique key in table
             df.drop(columns=self._get_drop_col('purchase'), inplace=True)
-            self.reformat_shipping_price(df, inplace=True)
+            self.reformat_shipping_price(df, col='product_price', inplace=True)
+            self.reformat_shipping_price(df, col='total_price', inplace=True)
+            self.reformat_shipping_price(df, col='shipping_price', inplace=True)
         elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout':
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
@@ -641,12 +645,22 @@ class TrackingParser:
         return data_list
 
     @staticmethod
-    def reformat_shipping_price(df, col='shipping_price', inplace=False):
+    def reformat_str_price(df, col='product_price', inplace=False):
         if inplace:
-            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x) for x in df[col]]
+            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x.replace(',','')) for x in df[col]]
         else:
             df_copy = df.copy()
             df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x) for x in df[col]]
+            return df_copy
+
+
+    @staticmethod
+    def reformat_shipping_price(df, col='shipping_price', inplace=False):
+        if inplace:
+            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x.replace(',','')) for x in df[col]]
+        else:
+            df_copy = df.copy()
+            df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x.replace(',','')) for x in df[col]]
             return df_copy
 
 
@@ -820,28 +834,28 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "kava" # chingtse, kava, draimior
-    date_utc8_start = "2022-03-14"
-    date_utc8_end = "2022-03-14"
+    web_id = "coway" # chingtse, kava, draimior
+    date_utc8_start = "2022-03-18"
+    date_utc8_end = "2022-03-18"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # event_type = "acceptCoupon"
     # # df_addCart = tracking.get_df(web_id, data_list, 'purchase', tracking.dict_settings)
-    # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
 
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'})
+    # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'})
     # dict_settings_all = tracking.fetch_parse_key_all_settings()
     # results = []
     # for d in data_list_filter:
     #     results += tracking.parse_rename_object_all(d,dict_settings_all, 'purchase')
 
     # df = tracking.get_df_all(data_list, 'leave')
-    df_list = tracking.get_six_events_df_all()
+    # df_list = tracking.get_six_events_df_all()
 
 
 
 
-    # df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
     # df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'sendCoupon')
 

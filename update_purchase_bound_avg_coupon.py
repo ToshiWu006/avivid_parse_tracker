@@ -71,9 +71,21 @@ def fetch_avg_shipping_purchase(web_id):
     query_shipping = f"""
                         SELECT avg(shipping_price) FROM clean_event_purchase 
                         where web_id='{web_id}' and shipping_price!=0 group by web_id"""
+    # query_purchase = f"""
+    #                     SELECT avg(total_price) FROM clean_event_purchase
+    #                     where web_id='{web_id}' group by web_id"""
     query_purchase = f"""
-                        SELECT avg(total_price) FROM clean_event_purchase 
-                        where web_id='{web_id}' group by web_id"""
+    SELECT 
+        SUM(a.total) / COUNT(a.total)
+    FROM
+        (SELECT 
+            SUM(product_price * product_quantity) AS total
+        FROM
+            tracker.clean_event_purchase
+        WHERE
+            web_id = '{web_id}'
+        GROUP BY uuid , session_id , timestamp) a    
+    """
     print(query_shipping, query_purchase)
     avg_shipping_price = MySqlHelper("tracker").ExecuteSelect(query_shipping)[0][0]
     avg_total_price = MySqlHelper("tracker").ExecuteSelect(query_purchase)[0][0]
