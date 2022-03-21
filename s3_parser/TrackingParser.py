@@ -657,10 +657,10 @@ class TrackingParser:
     @staticmethod
     def reformat_shipping_price(df, col='shipping_price', inplace=False):
         if inplace:
-            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x.replace(',','')) for x in df[col]]
+            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(str(x).replace(',','')) for x in df[col]]
         else:
             df_copy = df.copy()
-            df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x.replace(',','')) for x in df[col]]
+            df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(str(x).replace(',','')) for x in df[col]]
             return df_copy
 
 
@@ -834,9 +834,9 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "coway" # chingtse, kava, draimior
-    date_utc8_start = "2022-03-18"
-    date_utc8_end = "2022-03-18"
+    web_id = "lab52" # chingtse, kava, draimior
+    date_utc8_start = "2022-03-19"
+    date_utc8_end = "2022-03-19"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # event_type = "acceptCoupon"
@@ -855,7 +855,7 @@ if __name__ == "__main__":
 
 
 
-    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
+    # df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
     # df_sendCoupon, df_acceptCoupon, df_discardCoupon = tracking.get_three_coupon_events_df()
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'sendCoupon')
 
