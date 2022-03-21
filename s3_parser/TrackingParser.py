@@ -657,10 +657,10 @@ class TrackingParser:
     @staticmethod
     def reformat_shipping_price(df, col='shipping_price', inplace=False):
         if inplace:
-            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(str(x).replace(',','')) for x in df[col]]
+            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
         else:
             df_copy = df.copy()
-            df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(str(x).replace(',','')) for x in df[col]]
+            df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
             return df_copy
 
 
