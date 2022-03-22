@@ -237,8 +237,7 @@ class TrackingParser:
             df['model_keys'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_keys']]
             df['model_parameters'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_parameters']]
             df['model_X'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_X']]
-
-        df.drop_duplicates(subset=self._get_unique_col(event_type), inplace=True)
+        # df.drop_duplicates(subset=self._get_unique_col(event_type), inplace=True)
         df.dropna(inplace=True)
         df = self.clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16})
         return df
@@ -463,9 +462,10 @@ class TrackingParser:
             print(f"{object_key} not in {data_dict}, return []")
             return []
         collection_dict, dict_object = {}, json.loads(data_dict[object_key])
-        ## for dealing with adding 'purchase' key in purchase (91app, lovingfamily)
-        if key_join_list[0].split('.')[0] not in dict_object.keys():
-            dict_object = list(dict_object.values())[0]
+        if len(key_join_list[0].split('.')) > 1:
+            ## for dealing with adding 'purchase' key in purchase (91app, lovingfamily)
+            if key_join_list[0].split('.')[0] not in dict_object.keys():
+                dict_object = list(dict_object.values())[0]
         ## skip dict_object is not dict
         if type(dict_object)!=dict:
             return []
@@ -657,23 +657,17 @@ class TrackingParser:
         return data_list
 
     @staticmethod
-    def reformat_str_price(df, col='product_price', inplace=False):
-        if inplace:
-            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x.replace(',','')) for x in df[col]]
-        else:
-            df_copy = df.copy()
-            df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(x) for x in df[col]]
-            return df_copy
-
-
-    @staticmethod
     def reformat_shipping_price(df, col='shipping_price', inplace=False):
         if col in df.columns:
             if inplace:
-                df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
+                # df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
+                df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(''.join(re.findall("[0-9.]", str(x))))) for x in df[col]]
+
             else:
                 df_copy = df.copy()
-                df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
+                # df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
+                df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(''.join(re.findall("[0-9.]", str(x))))) for x in df[col]]
+
                 return df_copy
         else:
             return df
@@ -857,15 +851,26 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "draimior" # chingtse, kava, draimior, magiplanet
-    date_utc8_start = "2022-03-18"
-    date_utc8_end = "2022-03-20"
+    web_id = "yodee" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    # lovingfamily
+    date_utc8_start = "2022-03-22"
+    date_utc8_end = "2022-03-22"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # event_type = "acceptCoupon"
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
-    df = tracking.get_df(web_id, data_list_filter, 'purchase')
-
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'addCart'})
+    # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'addCart'})
+    # web_id_all = list(set([data['web_id'] for data in data_list_filter]))
+    # x = []
+    # for web_id in web_id_all:
+    #     df = tracking.get_df(web_id, data_list_filter, 'purchase')
+    #     x += [df.shape]
+    #     # df = TrackingParser().get_df_all(data_list_filter, 'purchase')
+    #     print(f"web_id: {web_id}, size:{df.shape[0]}")
+    # df = TrackingParser().get_df_all(data_list_filter, 'addCart')
+    df = tracking.get_df(web_id, data_list_filter, 'addCart')
+    # df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour = TrackingParser().get_six_events_df_all(data_list)
+    # df_p = TrackingParser().get_df_all(data_list, 'purchase')
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'})
     # dict_settings_all = tracking.fetch_parse_key_all_settings()
     # results = []
