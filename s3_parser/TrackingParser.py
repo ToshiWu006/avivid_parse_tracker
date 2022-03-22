@@ -376,8 +376,9 @@ class TrackingParser:
             return []
         collection_dict, dict_object = {}, json.loads(data_dict[object_key])
         ## for dealing with adding 'purchase' key in purchase (91app, lovingfamily)
-        if key_join_list[0].split('.')[0] not in dict_object.keys():
-            dict_object = list(dict_object.values())[0]
+        if len(key_join_list[0].split('.'))>1:
+            if key_join_list[0].split('.')[0] not in dict_object.keys():
+                dict_object = list(dict_object.values())[0]
         ## skip dict_object is not dict
         if type(dict_object)!=dict:
             return []
@@ -393,6 +394,8 @@ class TrackingParser:
                     temp = dict_object[k] if k in dict_object.keys() else -1
                     if type(temp) == str or type(temp) == int:
                         collection_dict.update({key_rename: temp})
+                    elif temp is None:
+                        collection_dict.update({key_rename: -1})
                     elif type(temp) == list:
                         value_list = temp
                         n_list = len(temp)
@@ -406,7 +409,10 @@ class TrackingParser:
                         value = json.loads(value)
                     elif type(value) == dict:  ## 2nd, 3rd... level
                         value = '_' if key_2nd == 'empty' else value[key_2nd]
-                        collection_dict.update({key_rename: value})
+                        if value is None:
+                            collection_dict.update({key_rename: -1})
+                        else:
+                            collection_dict.update({key_rename: value})
                     elif type(value) == list:  ## 2nd, 3rd... level(parse list)
                         n_list = len(value)
                         for v in value: ## value: list [{k21:v21, k22:v22, k23:v23,...}]
@@ -429,7 +435,11 @@ class TrackingParser:
                 for i in range(n_list):
                     temp_dict = {}
                     for j in range(n_dict_list_key):
-                        temp_dict.update({key_rename_list[n_dict_key + j]: value_list[n_list * j + i]})
+                        v = value_list[n_list * j + i]
+                        if v is None:
+                            temp_dict.update({key_rename_list[n_dict_key + j]: -1})
+                        else:
+                            temp_dict.update({key_rename_list[n_dict_key + j]: v})
                     temp_dict.update(collection_dict)
                     collection_purchase_dict_list += [temp_dict]
             else:
@@ -471,6 +481,8 @@ class TrackingParser:
                     temp = dict_object[k] if k in dict_object.keys() else -1
                     if type(temp) == str or type(temp) == int:
                         collection_dict.update({key_rename: temp})
+                    elif temp is None:
+                        collection_dict.update({key_rename: -1})
                     elif type(temp) == list:
                         value_list = temp
                         n_list = len(temp)
@@ -656,12 +668,15 @@ class TrackingParser:
 
     @staticmethod
     def reformat_shipping_price(df, col='shipping_price', inplace=False):
-        if inplace:
-            df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
+        if col in df.columns:
+            if inplace:
+                df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
+            else:
+                df_copy = df.copy()
+                df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
+                return df_copy
         else:
-            df_copy = df.copy()
-            df_copy[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
-            return df_copy
+            return df
 
 
     @staticmethod
@@ -740,9 +755,11 @@ class TrackingParser:
                        'max_time_no_scroll_last', 'max_time_no_click_last',
                        'max_scroll_depth_last', 'landing_count', 'date_time']
         elif event_type=='addCart':
-            columns = ['product_category', 'product_category_name', 'product_id',
-                       'product_name', 'product_price', 'product_quantity', 'web_id', 'uuid',
-                       'ga_id', 'fb_id', 'timestamp', 'avivid_coupon', 'device', 'url_last',
+            columns = ['product_id', 'product_name', 'product_price', 'product_quantity',
+                       'product_category', 'product_category_name', 'product_variant',
+                       'sku_id', 'sku_name', 'currency',
+                       'web_id', 'uuid', 'ga_id', 'fb_id',
+                       'timestamp', 'avivid_coupon', 'device', 'url_last',
                        'url_now', 'meta_title', 'scroll_height', 'window_innerHeight',
                        'time_pageview', 'scroll_depth', 'scroll_depth_px', 'click_count',
                        'click_count_total', 'time_no_move', 'time_no_scroll', 'time_no_click',
@@ -756,8 +773,10 @@ class TrackingParser:
                        'max_time_no_scroll_last', 'max_time_no_click_last',
                        'max_scroll_depth_last', 'landing_count', 'date_time']
         elif event_type=='removeCart':
-            columns = ['product_id', 'product_name', 'product_quantity', 'product_price',
-                       'sku_id', 'sku_name', 'currency', 'web_id', 'uuid', 'ga_id', 'fb_id',
+            columns = ['product_id', 'product_name', 'product_price', 'product_quantity',
+                       'product_category', 'product_category_name', 'product_variant',
+                       'sku_id', 'sku_name', 'currency',
+                       'web_id', 'uuid', 'ga_id', 'fb_id',
                        'timestamp', 'avivid_coupon', 'device', 'url_last', 'url_now',
                        'meta_title', 'scroll_height', 'window_innerHeight', 'time_pageview',
                        'scroll_depth', 'scroll_depth_px', 'click_count', 'click_count_total',
@@ -773,8 +792,9 @@ class TrackingParser:
                        'max_scroll_depth_last', 'landing_count', 'date_time']
         elif event_type=='purchase':
             columns = ['product_id', 'product_name', 'product_price', 'product_quantity',
-                       'product_category', 'product_variant', 'coupon', 'currency', 'order_id',
-                       'total_price', 'shipping_price', 'web_id', 'uuid', 'ga_id', 'fb_id',
+                       'product_category', 'product_category_name', 'product_variant',
+                       'coupon', 'currency', 'order_id', 'total_price', 'shipping_price',
+                       'web_id', 'uuid', 'ga_id', 'fb_id',
                        'timestamp', 'avivid_coupon', 'device', 'url_last', 'url_now',
                        'scroll_height', 'window_innerHeight', 'click_count_total',
                        'is_landing', 'session_id_last', 'session_id', 'pageviews',
@@ -817,13 +837,16 @@ class TrackingParser:
         if event_type=='load':
             subset = ['date_time', 'web_id', 'uuid', 'session_id']
         elif event_type=='purchase':
-            subset = ['date_time', 'web_id', 'uuid', 'product_id', 'product_variant',
-                      'product_quantity', 'product_category']
+            subset = ['date_time', 'web_id', 'uuid', 'product_id',
+                      'product_variant', 'product_category', 'product_price', 'product_name']
+            # subset = ['date_time', 'web_id', 'uuid', 'product_id', 'product_name']
         elif event_type == 'addCart':
-            subset = ['date_time', 'web_id', 'uuid', 'product_id', 'product_price',
-                      'product_quantity', 'product_category']
+            # subset = ['date_time', 'web_id', 'uuid', 'product_id', 'product_price',
+            #           'product_quantity', 'product_category']
+            subset = ['date_time', 'web_id', 'uuid', 'product_id']
         elif event_type=='removeCart':
-            subset = ['date_time', 'web_id', 'uuid', 'product_id', 'sku_id']
+            # subset = ['date_time', 'web_id', 'uuid', 'product_id', 'sku_id']
+            subset = ['date_time', 'web_id', 'uuid', 'product_id']
         elif event_type=='leave':
             subset = ['date_time', 'web_id', 'uuid', 'session_id']
         elif event_type == 'timeout':
@@ -834,14 +857,14 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "lab52" # chingtse, kava, draimior
-    date_utc8_start = "2022-03-19"
-    date_utc8_end = "2022-03-19"
+    web_id = "draimior" # chingtse, kava, draimior, magiplanet
+    date_utc8_start = "2022-03-18"
+    date_utc8_end = "2022-03-20"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # event_type = "acceptCoupon"
-    # # df_addCart = tracking.get_df(web_id, data_list, 'purchase', tracking.dict_settings)
     data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
+    df = tracking.get_df(web_id, data_list_filter, 'purchase')
 
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'})
     # dict_settings_all = tracking.fetch_parse_key_all_settings()
