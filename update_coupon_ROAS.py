@@ -133,7 +133,7 @@ def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost
     coupon_used = int(df_ROAS['cost']/coupon_cost)
     df_ROAS[['coupon_sent', 'coupon_accept', 'coupon_used']] = [[coupon_sent, coupon_accept, coupon_used]]
     days_remain = (to_datetime(activity_end)-curdate(utc=8)).days
-    df_ROAS['avg_n_coupon'] = [(coupon_total-coupon_used)/days_remain]
+    df_ROAS['avg_n_coupon'] = [0] if days_remain==0 else [(coupon_total-coupon_used)/days_remain]
     update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
     query_update = MySqlHelper.generate_insertDup_SQLquery(df_ROAS, 'addfan_activity', update_col)
     MySqlHelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query_update, df_ROAS.to_dict('records'))
