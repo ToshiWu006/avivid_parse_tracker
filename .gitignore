@@ -12,7 +12,7 @@
 /cdp_import_rawdata.py
 /s3_parser/s3_settings.json
 /s3_parser/data_list.pickle
-/logger/slack_settings.json
+/log_utils/slack_settings.json
 /s3data/
 /keyword_usertag_uuid_.py
 /keyword_usertag_uuidSorting.py
