@@ -200,6 +200,14 @@ def save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_disc
     ## discardCoupon events
     MySqlHelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
 
+
+def get_weg_id_df(df, web_id):
+    if df.shape[0]==0:
+        return pd.DataFrame()
+    else:
+        return df.query(f"web_id=='{web_id}'")
+
+
 @logging_channels(['clare_test'])
 @timing
 def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased):
@@ -207,14 +215,16 @@ def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCar
     df_stat_all = pd.DataFrame()
     for web_id in web_id_list:
         data_dict = {'web_id': web_id, 'date': date}
-        df_list = [df_loaded.query(f"web_id=='{web_id}'"), df_leaved.query(f"web_id=='{web_id}'"),
-                   df_timeout.query(f"web_id=='{web_id}'"), df_addCart.query(f"web_id=='{web_id}'"),
-                   df_removeCart.query(f"web_id=='{web_id}'"), df_purchased.query(f"web_id=='{web_id}'")]
+        # df_list = [df_loaded.query(f"web_id=='{web_id}'"), df_leaved.query(f"web_id=='{web_id}'"),
+        #            df_timeout.query(f"web_id=='{web_id}'"), df_addCart.query(f"web_id=='{web_id}'"),
+        #            df_removeCart.query(f"web_id=='{web_id}'"), df_purchased.query(f"web_id=='{web_id}'")]
+        df_list = [df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased]
         columns = ['n_events_load', 'n_uuid_load', 'n_events_leave', 'n_uuid_leave', 'n_events_timeout',
                    'n_uuid_timeout',
                    'n_events_addCart', 'n_uuid_addCart', 'n_events_removeCart', 'n_uuid_removeCart',
                    'n_events_purchase', 'n_uuid_purchase']
         for i, df in enumerate(df_list):
+            df = get_weg_id_df(df, web_id)
             if df.shape[0] == 0:
                 n_events, n_uuid = 0, 0
             else:
@@ -248,14 +258,14 @@ def parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter):
 if __name__ == "__main__":
     ## load data from s3
     data_list_filter, datetime_lastHour = collectLastHour()
-    ## test
-    data_list_filter_event = filterListofDictByDict(data_list_filter, dict_criteria={"event_type":'purchase'})
+    # ## test
+    # data_list_filter_event = filterListofDictByDict(data_list_filter, dict_criteria={"event_type":'purchase'})
 
     ## save collection to s3 every hour
     AmazonS3('elephants3').upload_tracker_data(datetime_utc0=datetime_lastHour)
     ## save six events to db including drop_duplicates (by web_id)
     web_id_all = fetch_enable_analysis_web_id()
-    # web_id_all = ['draimior']
+    # web_id_all = ['lab52']
     date_utc8 = datetime_to_str(datetime_lastHour)
     df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour, df_stat_all = parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter)
     save_six_clean_events(df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour)
