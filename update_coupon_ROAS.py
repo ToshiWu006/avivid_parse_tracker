@@ -1,7 +1,8 @@
 from db import MySqlHelper
-from basic import datetime_to_str, timing, logging_channels, to_datetime, curdate
+from basic import timing, logging_channels, to_datetime, curdate
 import pandas as pd
-import datetime
+from definitions import ROOT_DIR
+
 @timing
 def fetch_coupon_activity_running():
     query = f"""
@@ -112,7 +113,7 @@ def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost
     else:
         query = f"""
         SELECT
-            sum(temp.total_price) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost
+            IFNULL(sum(temp.total_price),0) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost
         FROM
             (SELECT
                 a.uuid AS uuid,
@@ -178,7 +179,7 @@ def fetch_type_total_price():
     return type_total_price_dict
 
 
-@logging_channels(['clare_test'])
+@logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
 def main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, coupon_total, activity_start, activity_end, type_total_price):
     coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
     df_ROAS = fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, coupon_total, activity_start, activity_end, type_total_price)
