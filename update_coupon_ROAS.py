@@ -63,7 +63,7 @@ def fetch_coupon_cost(web_id, coupon_type, coupon_amount):
         query = f"SELECT avg_total_price FROM addfan_stat WHERE web_id='{web_id}'"
         print(query)
         ## coupon_amount must between 0 and 10
-        coupon_cost = float(MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)[0][0])*(10-coupon_amount)/10
+        coupon_cost = float(MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)[0][0])*(10-float(coupon_amount))/10
     else:
         coupon_cost = 100
     return coupon_cost
@@ -131,7 +131,7 @@ def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost
     df_ROAS = pd.DataFrame(data, columns=['revenue', 'cost'])
     df_ROAS['id'] = [coupon_id]
     coupon_sent, coupon_accept = fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end)
-    coupon_used = int(df_ROAS['cost']/coupon_cost)
+    coupon_used = int(float(df_ROAS['cost'])/coupon_cost)
     df_ROAS[['coupon_sent', 'coupon_accept', 'coupon_used']] = [[coupon_sent, coupon_accept, coupon_used]]
     days_remain = (to_datetime(activity_end)-curdate(utc=8)).days
     df_ROAS['avg_n_coupon'] = [0] if days_remain==0 else [(coupon_total-coupon_used)/days_remain]
@@ -188,6 +188,7 @@ def main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, co
 if __name__ == "__main__":
     type_total_price_dict = fetch_type_total_price()
     df_coupon = fetch_coupon_activity_running()
+    # df_coupon = df_coupon.query(f"web_id=='coway'")
     for i,row in df_coupon.iterrows():
         coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
         type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0

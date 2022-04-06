@@ -235,19 +235,16 @@ def main_update_purchcase_bound(coupon_id, web_id, avg_n_coupon, data_use_db=Tru
 ## update lower_bound, model_precision, estimate_n_coupon, avg_n_coupon everyday (or 8 hour)
 if __name__ == "__main__":
 
-    #### update addfan_stat and cdp_tracking_settings table
-    # web_id_list = fetch_addfan_web_id()
-    # # web_id_list = ['94monster']
-    # for web_id in web_id_list:
-    #     ## update addfan_stat table
-    #     df_stat = main_update_avg_shipping_purchase(web_id, update_db=True)
+    #### update addfan_stat table
+    web_id_list = fetch_addfan_web_id()
+    # web_id_list = ['94monster']
+    for web_id in web_id_list:
+        ## update addfan_stat table
+        df_stat = main_update_avg_shipping_purchase(web_id, update_db=True)
 
     #### update lower_bound, model_precision, estimate_n_coupon, avg_n_coupon
     df_running_activity = fetch_running_activity()
     # df_running_activity = pd.DataFrame([[13,'nineyi11',2222.2]], columns=['id','web_id','avg_n_coupon'])
-    # df_running_activity = pd.DataFrame([[49,'lovingfamily',166.67]], columns=['id','web_id','avg_n_coupon'])
-    # df_running_activity = pd.DataFrame([[78, '94monster', 375]], columns=['id', 'web_id', 'avg_n_coupon'])
-
     for i, row in df_running_activity.iterrows():
         coupon_id, web_id, avg_n_coupon = row
         df_activity_param, df_test = main_update_purchcase_bound(coupon_id, web_id, avg_n_coupon,
