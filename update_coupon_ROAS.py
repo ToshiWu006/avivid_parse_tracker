@@ -41,106 +41,6 @@ def fetch_coupon_activity_just_expired():
     return df_coupon
 
 @timing
-def fetch_coupon_cost(web_id, coupon_type, coupon_amount):
-    """
-
-    Parameters
-    ----------
-    coupon_type: 折扣類型 {0:無設定 1:免運 2:元 3:% 4:n送n}
-    coupon_amount: fill blank
-
-    Returns
-    -------
-
-    """
-    if coupon_type==1:
-        query = f"SELECT avg_shipping_price FROM addfan_stat WHERE web_id='{web_id}'"
-        print(query)
-        coupon_cost = int(MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)[0][0])
-    elif coupon_type==2:
-        coupon_cost = int(coupon_amount)
-    elif coupon_type==3:
-        query = f"SELECT avg_total_price FROM addfan_stat WHERE web_id='{web_id}'"
-        print(query)
-        ## coupon_amount must between 0 and 10
-        coupon_cost = float(MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)[0][0])*(10-float(coupon_amount))/10
-    else:
-        coupon_cost = 100
-    return coupon_cost
-
-""""
-SELECT 
-	sum(temp.total_price) as revenue, COUNT(temp.total_price)*100 as cost
-FROM
-	(SELECT 
-		a.uuid AS uuid,
-		b.session_id AS session_b,
-		a.link_code,
-		AVG(b.total_price) AS total_price
-	FROM
-		(select * from tracker.clean_event_acceptCoupon where web_id='nineyi11' and link_code = 'aAX9Qe0IAa') as a
-	INNER JOIN (select * from tracker.clean_event_purchase where web_id='nineyi11' and total_price>1000) as b ON a.uuid = b.uuid
-		AND a.session_id = b.session_id
-	GROUP BY uuid , session_b) AS temp
-"""
-
-
-@timing
-def fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, coupon_total, activity_start, activity_end, type_total_price):
-    if type_total_price==0: ## use product_price * product_quantity
-        query = f"""
-                SELECT
-                    IFNULL(SUM(temp.total),0) AS revenue, COUNT(temp.total) * {coupon_cost} AS cost
-                FROM
-                    (SELECT
-                        a.uuid AS uuid,	b.session_id AS session_b, b.total
-                    FROM
-                        (SELECT * FROM tracker.clean_event_acceptCoupon
-                        WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
-                        AND web_id = '{web_id}' AND link_code = '{link_code}') AS a
-                    INNER JOIN (SELECT
-                        uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
-                    FROM
-                        tracker.clean_event_purchase
-                    WHERE
-                        date_time BETWEEN '{activity_start}' AND '{activity_end}'
-                        AND web_id = '{web_id}'
-                    GROUP BY uuid , session_id, timestamp
-                    HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b ON a.uuid = b.uuid
-                        AND a.session_id = b.session_id
-                    GROUP BY uuid , session_b) AS temp
-        """
-    else:
-        query = f"""
-        SELECT
-            IFNULL(sum(temp.total_price),0) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost
-        FROM
-            (SELECT
-                a.uuid AS uuid,
-                b.session_id AS session_b,
-                a.link_code,
-                b.total_price
-            FROM
-                (select * from tracker.clean_event_acceptCoupon where web_id='{web_id}' and link_code = '{link_code}') as a
-            INNER JOIN (select * from tracker.clean_event_purchase where web_id='{web_id}' and total_price>{coupon_price_limit}) as b ON a.uuid = b.uuid
-                AND a.session_id = b.session_id
-            GROUP BY uuid , session_b) AS temp
-        """
-    print(query)
-    data = MySqlHelper("tracker").ExecuteSelect(query)
-    df_ROAS = pd.DataFrame(data, columns=['revenue', 'cost'])
-    df_ROAS['id'] = [coupon_id]
-    coupon_sent, coupon_accept = fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end)
-    coupon_used = int(float(df_ROAS['cost'])/coupon_cost)
-    df_ROAS[['coupon_sent', 'coupon_accept', 'coupon_used']] = [[coupon_sent, coupon_accept, coupon_used]]
-    days_remain = (to_datetime(activity_end)-curdate(utc=8)).days
-    df_ROAS['avg_n_coupon'] = [0] if days_remain==0 else [(coupon_total-coupon_used)/days_remain]
-    update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
-    query_update = MySqlHelper.generate_insertDup_SQLquery(df_ROAS, 'addfan_activity', update_col)
-    MySqlHelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query_update, df_ROAS.to_dict('records'))
-    return df_ROAS
-
-@timing
 def fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end):
     query_sent = f"""
     SELECT
@@ -179,28 +79,148 @@ def fetch_type_total_price():
     return type_total_price_dict
 
 
+""""
+SELECT 
+	sum(temp.total_price) as revenue, COUNT(temp.total_price)*100 as cost
+FROM
+	(SELECT 
+		a.uuid AS uuid,
+		b.session_id AS session_b,
+		a.link_code,
+		AVG(b.total_price) AS total_price
+	FROM
+		(select * from tracker.clean_event_acceptCoupon where web_id='nineyi11' and link_code = 'aAX9Qe0IAa') as a
+	INNER JOIN (select * from tracker.clean_event_purchase where web_id='nineyi11' and total_price>1000) as b ON a.uuid = b.uuid
+		AND a.session_id = b.session_id
+	GROUP BY uuid , session_b) AS temp
+"""
+@timing
+def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, coupon_price_limit,
+                                   activity_start, activity_end, type_total_price):
+    if type_total_price==0: ## use product_price * product_quantity
+        query = f"""
+                SELECT
+                    IFNULL(SUM(temp.total),0) AS revenue, COUNT(temp.total) * {coupon_cost} AS cost, 
+                    COUNT(temp.total) as coupon_used
+                FROM
+                    (SELECT
+                        a.uuid AS uuid,	b.session_id AS session_b, b.total
+                    FROM
+                        (SELECT * FROM tracker.clean_event_acceptCoupon
+                        WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                        AND web_id = '{web_id}' AND coupon_id = '{coupon_id}') AS a
+                    INNER JOIN (SELECT
+                        uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
+                    FROM
+                        tracker.clean_event_purchase
+                    WHERE
+                        date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                        AND web_id = '{web_id}'
+                    GROUP BY uuid , session_id, timestamp
+                    HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b ON a.uuid = b.uuid
+                        AND a.session_id = b.session_id
+                    GROUP BY uuid , session_b) AS temp
+        """
+    else:
+        query = f"""
+        SELECT
+            IFNULL(sum(temp.total_price),0) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost,
+            COUNT(temp.total_price) as coupon_used
+        FROM
+            (SELECT
+                a.uuid AS uuid,
+                b.session_id AS session_b,
+                b.total_price
+            FROM
+                (select * from tracker.clean_event_acceptCoupon where web_id='{web_id}' and coupon_id = '{coupon_id}') as a
+            INNER JOIN (select * from tracker.clean_event_purchase where web_id='{web_id}' and total_price>{coupon_price_limit}) as b ON a.uuid = b.uuid
+                AND a.session_id = b.session_id
+            GROUP BY uuid , session_b) AS temp
+        """
+    print(query)
+    data = MySqlHelper("tracker").ExecuteSelect(query)
+    df_ROAS = pd.DataFrame(data, columns=['revenue', 'cost', 'coupon_used'])
+    if coupon_type==3: # % off
+        ## replace calculation of cost
+        df_ROAS['cost'] = int(int(df_ROAS['revenue'])*(10-float(coupon_amount))/10)
+    df_ROAS['id'] = [coupon_id]
+    return df_ROAS
+
+def get_n_coupon_stat(df_ROAS, coupon_id, activity_start, activity_end, coupon_total):
+    coupon_used = int(df_ROAS['coupon_used'])
+    coupon_sent, coupon_accept = fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end)
+    df_ROAS[['coupon_sent', 'coupon_accept']] = [[coupon_sent, coupon_accept]]
+    days_remain = (to_datetime(activity_end)-curdate(utc=8)).days
+    df_ROAS['avg_n_coupon'] = [0] if days_remain==0 else [(coupon_total-coupon_used)/days_remain]
+    return df_ROAS
+
+
+def update_ROAS(df_ROAS, is_save=True):
+    update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
+    query_update = MySqlHelper.generate_insertDup_SQLquery(df_ROAS, 'addfan_activity', update_col)
+    if is_save:
+        MySqlHelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query_update, df_ROAS.to_dict('records'))
+
+@timing
+def fetch_coupon_cost(web_id, coupon_type, coupon_amount):
+    """
+
+    Parameters
+    ----------
+    coupon_type: 折扣類型 {0:無設定 1:免運 2:元 3:% 4:n送n}
+    coupon_amount: fill blank
+
+    Returns
+    -------
+
+    """
+    if coupon_type==1:
+        query = f"SELECT avg_shipping_price FROM addfan_stat WHERE web_id='{web_id}'"
+        print(query)
+        coupon_cost = int(MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)[0][0])
+    elif coupon_type==2:
+        coupon_cost = int(coupon_amount)
+    elif coupon_type==3:
+        print(f"use total cost * (1-{coupon_amount}/10)")
+        coupon_cost = -1 # assign temp value
+    else:
+        coupon_cost = 100
+    return coupon_cost
+
+
 @logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
-def main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, coupon_total, activity_start, activity_end, type_total_price):
+def main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit, coupon_type, coupon_amount,
+                            coupon_total, activity_start, activity_end, type_total_price,
+                            is_save=True):
     coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
-    df_ROAS = fetch_update_revenue_cost_n_coupon(web_id, coupon_id, link_code, coupon_cost, coupon_price_limit, coupon_total, activity_start, activity_end, type_total_price)
+    df_ROAS = fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, coupon_price_limit,
+                                   activity_start, activity_end, type_total_price)
+    df_ROAS = get_n_coupon_stat(df_ROAS, coupon_id, activity_start, activity_end, coupon_total)
+    update_ROAS(df_ROAS, is_save=is_save)
+
     return df_ROAS
 
 if __name__ == "__main__":
     type_total_price_dict = fetch_type_total_price()
     df_coupon = fetch_coupon_activity_running()
     # df_coupon = df_coupon.query(f"web_id=='coway'")
+    df_ROAS_all = pd.DataFrame()
     for i,row in df_coupon.iterrows():
         coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
         type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
-        df_ROAS = main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, coupon_total, activity_start, activity_end, type_total_price)
-
+        df_ROAS = main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit, coupon_type, coupon_amount,
+                                          coupon_total, activity_start, activity_end, type_total_price,
+                                          is_save=True)
+        df_ROAS_all = pd.concat([df_ROAS_all,df_ROAS])
     ## update ROAS just expired
     df_coupon_just_expired = fetch_coupon_activity_just_expired()
+    df_ROAS_expired_all = pd.DataFrame()
     for i,row in df_coupon_just_expired.iterrows():
         coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
         type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
-        df_ROAS_expired = main_update_addFan_ROAS(web_id, coupon_id, link_code, coupon_price_limit, coupon_type, coupon_amount, coupon_total, activity_start, activity_end, type_total_price)
+        df_ROAS_expired = main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit, coupon_type, coupon_amount,
+                                                  coupon_total, activity_start, activity_end, type_total_price,
+                                                  is_save=True)
+        df_ROAS_expired_all = pd.concat([df_ROAS_expired_all,df_ROAS])
 
-
-    # df_ROAS = fetch_update_revenue_cost_n_coupon('nineyi11', 13, 'aAX9Qe0IAa', 100, 1000, '2022-02-24', '2022-03-02')
 
