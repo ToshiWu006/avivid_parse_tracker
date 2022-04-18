@@ -1,4 +1,4 @@
-from db import MySqlHelper
+from db import MySqlHelper, DBhelper
 from mining import MiningTracking
 from s3_parser import TrackingParser
 from basic import datetime_to_str, logging_channels, filterListofDictByDict, timing, to_datetime
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 @timing
 def fetch_mining_settings(web_id):
     query = f"SELECT n_day_testing,lower_bound,model_key,n_weight FROM cdp_tracking_settings where web_id='{web_id}'"
-    data = MySqlHelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
+    data = DBhelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
     n_day_testing, lower_bound, features_join, n_weight = data[0]
     features_select = features_join.split(',')
     return n_day_testing, lower_bound, features_select, n_weight
@@ -20,7 +20,7 @@ def fetch_mining_settings(web_id):
 @timing
 def fetch_train_model(web_id):
     query = f"SELECT model_value,model_intercept FROM cdp_tracking_settings where web_id='{web_id}'"
-    data = MySqlHelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
+    data = DBhelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
     model_coeff_join, intercept = data[0]
     coeff = np.array(model_coeff_join.split(',')).astype(float)
     return coeff, intercept
@@ -29,7 +29,7 @@ def fetch_train_model(web_id):
 @timing
 def fetch_addfan_web_id():
     query = f"SELECT web_id FROM cdp_tracking_settings where enable_addfan=1"
-    data = MySqlHelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
+    data = DBhelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
     web_id_list = [d[0] for d in data]
     return web_id_list
 
@@ -41,7 +41,7 @@ def fetch_running_activity():
     FROM addfan_activity WHERE datediff(start_time,curdate())<=2 and curdate()<=end_time and activity_enable=1 and coupon_enable=1
     and activity_delete=0 and web_id != 'rick'
     """
-    data = MySqlHelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
+    data = DBhelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
     if data == []:
         print(f"no available coupon in running")
         return pd.DataFrame()
@@ -69,14 +69,14 @@ def fetch_running_activity():
 @timing
 def fetch_avg_shipping_purchase(web_id):
     query_shipping = f"""
-                        SELECT avg(shipping_price) FROM clean_event_purchase 
-                        where web_id='{web_id}' and shipping_price!=0 group by web_id"""
+    SELECT avg(shipping_price) FROM clean_event_purchase 
+    where web_id='{web_id}' and shipping_price!=0 group by web_id"""
     # query_purchase = f"""
     #                     SELECT avg(total_price) FROM clean_event_purchase
     #                     where web_id='{web_id}' group by web_id"""
     query_purchase = f"""
     SELECT 
-        SUM(a.total) / COUNT(a.total)
+        IFNULL(SUM(a.total) / COUNT(a.total), -1)
     FROM
         (SELECT 
             SUM(product_price * product_quantity) AS total
@@ -87,8 +87,10 @@ def fetch_avg_shipping_purchase(web_id):
         GROUP BY uuid , session_id , timestamp) a    
     """
     print(query_shipping, query_purchase)
-    avg_shipping_price = MySqlHelper("tracker").ExecuteSelect(query_shipping)[0][0]
-    avg_total_price = MySqlHelper("tracker").ExecuteSelect(query_purchase)[0][0]
+    avg_shipping_price = DBhelper("tracker").ExecuteSelect(query_shipping)
+    avg_shipping_price = avg_shipping_price[0][0] if len(avg_shipping_price)!=0 else -1
+    avg_total_price = DBhelper("tracker").ExecuteSelect(query_purchase)
+    avg_total_price = avg_total_price[0][0] if len(avg_total_price)!=0 else -1
     return int(avg_shipping_price), int(avg_total_price)
 
 
@@ -102,8 +104,8 @@ def main_update_avg_shipping_purchase(web_id, update_db=True):
         ## update model parameters
         # query = MySqlHelper.generate_updateTable_SQLquery('cdp_tracking_settings', df_stat.columns[1:], ['web_id'])
         # MySqlHelper("rheacache-db0", is_ssh=True).ExecuteUpdate(query, df_stat.to_dict('records'))
-        query2 = MySqlHelper.generate_insertDup_SQLquery(df_stat, 'addfan_stat', df_stat.columns[1:])
-        MySqlHelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query2, df_stat.to_dict('records'))
+        query2 = DBhelper.generate_insertDup_SQLquery(df_stat, 'addfan_stat', df_stat.columns[1:])
+        DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query2, df_stat.to_dict('records'))
     return df_stat
 
 
@@ -227,8 +229,8 @@ def main_update_purchcase_bound(coupon_id, web_id, avg_n_coupon, data_use_db=Tru
     ## update model parameters
     if update_db:
         ## update every activity
-        query = MySqlHelper.generate_updateTable_SQLquery('addfan_activity', df_activity_param.columns[1:], ['id'])
-        MySqlHelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query, df_activity_param.to_dict('records'))
+        query = DBhelper.generate_updateTable_SQLquery('addfan_activity', df_activity_param.columns[1:], ['id'])
+        DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query, df_activity_param.to_dict('records'))
     return df_activity_param, df_test
 
 

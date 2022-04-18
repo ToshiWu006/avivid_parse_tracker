@@ -1,5 +1,4 @@
-import os, json, socket, math, logging, traceback
-from logging.handlers import RotatingFileHandler
+import os, json, socket, math, traceback
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
@@ -29,7 +28,7 @@ class DBhelper:
         self.connection = self.engine.connect()
         self.session = sessionmaker(bind=self.engine)(bind=self.connection)
     @logging_local(log_foler, log_traceback=False)
-    def ExecuteSelect(self, query, disconnect=False):
+    def ExecuteSelect(self, query, disconnect=True):
         '''
             输入查詢SQL語句
             输出：查詢的結果
@@ -59,8 +58,40 @@ class DBhelper:
         print(f"affected rows: {count}")
         return count
 
+    def ExecuteDelete(self, query, disconnect=True):
+        '''
+            输入非查詢SQL語句
+            输出：受影響的行數
+        '''
+        count = 0
+        try:
+            result = self.execute_raw_sql(query)
+            count = result.rowcount
+            self.session.commit()
+        except Exception as e:
+            error_log(e, ROOT_DIR=log_foler)
+            print(e)
+            self.session.rollback()
+        if disconnect:
+            self.session_close()
+        print(f"affected rows: {count}")
+        return count
+
+    ## will lock table while optimizing
+    def ExecuteOptimize(self, table):
+        try:
+            self.execute_raw_sql(f"optimize table {table}")
+            self.session.commit()
+        except Exception as e:
+            error_log(e, ROOT_DIR=log_foler)
+            print(e)
+            self.session.rollback()
+        self.session_close()
+        print("finish optimizing table")
+
     @staticmethod
-    def ExecuteUpdatebyChunk(df, db, table, chunk_size=100000, is_ssh=False):
+    def ExecuteUpdatebyChunk(df, db, table='', query=None, SQL_action=1,
+                             update_col_list=[], chunk_size=100000, is_ssh=False):
         """
         iteratively update sql by chunk_size
 
@@ -69,7 +100,9 @@ class DBhelper:
         df: DataFrame
         db: str: schema name
         table: str: table name
-
+        query: str: operation of SQL, default using REPLACE INTO
+        SQL_action: int: not used if query!=None, 0:insert on duplicate key, other:replace into
+        update_col_list: list: not used if query!=None, for insert on duplicate key
         Returns
         -------
 
@@ -78,7 +111,13 @@ class DBhelper:
         if df.shape[0]==0:
             print("no available dat to import")
         else:
-            query = dbhelper.generate_update_SQLquery(df, table)
+            if query==None:
+                if SQL_action==0:
+                    query = dbhelper.generate_update_SQLquery(df, table)
+                else:
+                    update_col_list = df.columns if update_col_list==[] else update_col_list
+                    query = dbhelper.generate_insertDup_SQLquery(df, table, update_col_list)
+            # query = dbhelper.generate_update_SQLquery(df, table)
             dict_list = df.to_dict('records')
             n = int(math.ceil(len(dict_list)/chunk_size))
             if n<=1: ## directly import all
@@ -125,7 +164,7 @@ class DBhelper:
     #     '''
     # """
     @staticmethod
-    def generate_insertDup_SQLquery(df, table_name, update_col_list):
+    def generate_insertDup_SQLquery(df, table_name:str, update_col_list:list):
         columns = df.columns.values
         n_col = len(columns)
         query = f"INSERT INTO {table_name}"
@@ -201,8 +240,6 @@ class DBhelper:
         schema = config['MYSQL_DB']
         if password:
             user = f"{user}:{password}"
-        # return "mysql+pymysql://{}@{}/{}??charset=utf8mb4".format(user, host, config["MYSQL_DB"])
-        # return "mysql+pymysql://{}@{}/{}?".format(user, host, config["MYSQL_DB"])
         return f"mysql+pymysql://{user}@{host}/{schema}"
 
     def _ssh_forwarder(self, config):
@@ -224,53 +261,11 @@ class DBhelper:
         schema = config['MYSQL_DB']
         if password:
             user = f"{user}:{password}"
-            # user = "{}:{}".format(user, password)
-        # return "mysql+pymysql://{}@{}/{}??charset=utf8mb4".format(user, host, config["MYSQL_DB"])
-        # return "mysql+pymysql://{}@{}/{}?".format(user, host, config["MYSQL_DB"])
         return f"mysql+pymysql://{user}@{host}/{schema}"
 
-class ErrorLogger:
-    def __init__(self):
-        # logging.basicConfig(filename=os.path.join(ROOT_DIR, 'example.log'),
-        #                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        #                     level=logging.INFO)
-        # logging.info('Started')
-
-        log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
-
-        log_path = os.path.join(ROOT_DIR, 'example.log')
-
-        my_handler = RotatingFileHandler(log_path, mode='a', maxBytes=10*1024*1024,
-                                         backupCount=2, encoding=None, delay=0)
-        my_handler.setFormatter(log_formatter)
-        my_handler.setLevel(logging.INFO)
-
-        app_log = logging.getLogger('root')
-        app_log.setLevel(logging.INFO)
-        app_log.addHandler(my_handler)
-
-# def error_log(message, filename='error.log', filefolder='log', maxBytes=5*1024*1024, setLevel='info', name='root',
-#               formatter='%(asctime)s %(name)s %(message)s'):
-#     log_formatter = logging.Formatter(formatter)
-#     log_path = os.path.join(ROOT_DIR, filefolder, filename)
-#     my_handler = RotatingFileHandler(log_path, mode='a', maxBytes=maxBytes,
-#                                      backupCount=2, encoding=None, delay=0)
-#     my_handler.setFormatter(log_formatter)
-#     if setLevel=='info':
-#         my_handler.setLevel(logging.INFO)
-#     else:
-#         my_handler.setLevel(logging.WARNING)
-#     logger = logging.getLogger(name=name)
-#     logger.setLevel(logging.INFO)
-#     logger.addHandler(my_handler)
-#     if setLevel=='info':
-#         logger.info(message)
-#     else:
-#         logger.warning(message)
 
 if __name__ == '__main__':
 
-    # a = 1
     x = DBhelper('tracker')
     # query = "SELECT *x FROM tracker.clean_event_purchase order by id desc limit 100"
     df = pd.DataFrame([{'web_idx': 'xxx'}]*3)
@@ -279,71 +274,4 @@ if __name__ == '__main__':
     # x.session_close()
     # data = x.ExecuteSelect(query)
 
-    # log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
-    #
-    # logFile = os.path.join(ROOT_DIR, 'example.log')
-    #
-    # my_handler = RotatingFileHandler(logFile, mode='a', maxBytes=3 * 1024,
-    #                                  backupCount=2, encoding=None, delay=0)
-    # my_handler.setFormatter(log_formatter)
-    # my_handler.setLevel(logging.INFO)
-    #
-    # app_log = logging.getLogger('root')
-    # app_log.setLevel(logging.INFO)
-    # app_log.addHandler(my_handler)
-    # @logging_channels(save_slack=False, save_local=True, ROOT_DIR=ROOT_DIR)
-    # def report():
-    #     return 1/0
-    #
-    #
-    # report()
-    # def test_error():
-    #     while True:
-    #         time.sleep(0.1)
-    #         try:
-    #             report()
-    #         except Exception as e:
-    #             error_log(e)
-
-
-    # test_error()
-        # app_log.info("data")
-        # error_log("test xxxxx")
-
-
-    # logger = logging.getLogger(os.path.join(ROOT_DIR, 'example2.log'))
-    # ch = logging.StreamHandler()
-    #
-    # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    # ch.setFormatter(formatter)
-    # logger.addHandler(ch)
-    # logging.info('Started')
-    # logging.info('Finished')
-    # logger.debug('debug message')
-    # logger.info('info message')
-    # logger.warning('warn message')
-    # logger.error('error message')
-    # logger.critical('critical message')
-
-    # logging.basicConfig(filename=os.path.join(ROOT_DIR, 'example.log'),
-    #                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    #                     level=logging.INFO)
-    # logging.info('Started')
-    # logging.info('Finishedxxxx')
-
-    # import logging
-    #
-    # logging.basicConfig(filename=os.path.join(ROOT_DIR, 'example.log'), encoding='utf-8', level=logging.DEBUG)
-    # logging.debug('This message should go to the log file')
-    # logging.info('So should this')
-    # logging.warning('And this, too')
-    # logging.error('And non-ASCII stuff, too, like Øresund and Malmö')
-
-    # result = x.session.execute(query)
-    # data = result.fetchall()
-    # x.check_session_is_active()
-
-    # x.session_close()
-
-    # x.session.get_bind().close()
 
