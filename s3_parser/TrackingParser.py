@@ -612,26 +612,26 @@ class TrackingParser:
         return data_list
 
     @staticmethod
-    def get_file_byHour(date_utc0, hour_utc0='00'):
+    def get_file_byHour(date, hour, utc=0, pattern='%Y-%m-%d'):
         """
 
         Parameters
         ----------
-        date_utc0: with format, str:'2022-01-01' or str:'2022/01/01'
-        hour_utc0: with format, str:'00'-'23' or int:0-23
+        date: with format, str:'2022-01-01'(default pattern) or str:'2022/01/01'
+        hour: with format, int:0-23
+        pattern: parse date, str: '%Y-%m-%d' or '%Y/%m/%d'
 
         Returns: data_list
         -------
 
         """
-        if type(date_utc0)==datetime.datetime:
-            date_utc0 = datetime.datetime.strftime(date_utc0, '%Y-%m-%d')
-        if type(hour_utc0)==int:
-            hour_utc0 = f"{hour_utc0:02}"
-        path = os.path.join(ROOT_DIR, "s3data", date_utc0.replace('-', '/'), hour_utc0, "rawData.pickle")
+        path = TrackingParser.get_date_hour_filepath(date, hour, utc, pattern)
+
         if os.path.isfile(path):
             with open(path, 'rb') as f:
                 data_list = pickle.load(f)
+        else:
+            data_list = []
         return data_list
 
     @staticmethod
@@ -684,6 +684,17 @@ class TrackingParser:
             os.path.join(ROOT_DIR, "s3data", datetime_to_str(root_folder, pattern="%Y/%m/%d/%H"), "rawData.pickle") for
             root_folder in datetime_list]
         return file_list
+
+    @staticmethod
+    def get_date_hour_filepath(date, hour, utc=8, pattern="%Y-%m-%d"):
+        if type(date) == datetime.datetime:
+            datetime_utc0 = date + datetime.timedelta(hours=-utc+hour)
+        else:
+            datetime_utc0 = datetime.datetime.strptime(date, pattern) + datetime.timedelta(hours=-utc+hour)
+        path = os.path.join(ROOT_DIR, "s3data", datetime_to_str(datetime_utc0, pattern="%Y/%m/%d/%H"), "rawData.pickle")
+        return path
+
+
     @staticmethod
     def _get_event_table(event_type):
         if event_type=='load':
@@ -851,14 +862,14 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "94monster" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "pufii" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-04-07"
-    date_utc8_end = "2022-04-07"
+    date_utc8_start = "2022-04-20"
+    date_utc8_end = "2022-04-20"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
-    # event_type = "acceptCoupon"
+    # # event_type = "acceptCoupon"
     data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id})
     # web_id_all = list(set([data['web_id'] for data in data_list_filter]))
@@ -870,3 +881,6 @@ if __name__ == "__main__":
     #     print(f"web_id: {web_id}, size:{df.shape[0]}")
     # args = TrackingParser(None, date_utc8_start, date_utc8_end).get_six_events_df_all(use_db=False)
     # df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = TrackingParser(None, date_utc8, date_utc8).get_six_events_df_all(use_db=False)
+
+    # file = TrackingParser.get_date_hour_file('2022-04-19', 10)
+    # data = TrackingParser.get_file_byHour('2022-04-20', 13, utc=8)
