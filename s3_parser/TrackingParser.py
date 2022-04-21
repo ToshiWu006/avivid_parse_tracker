@@ -491,7 +491,7 @@ class TrackingParser:
             else:  ## parse multiple layer
                 for key_2nd in key_list:
                     if value == '':  ## 1st level
-                        value = '_' if key_2nd == 'empty' else dict_object[key_2nd]
+                        value = '_' if key_2nd == 'empty' or key_2nd not in dict_object.keys() else dict_object[key_2nd]
                     elif key_2nd=='json': ## use json.loads() => i3fresh case
                         value = json.loads(value)
                     elif type(value) == dict:  ## 2nd, 3rd... level
@@ -862,16 +862,25 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "pufii" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "unt" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-04-20"
-    date_utc8_end = "2022-04-20"
+    date_utc8_start = "2022-04-21"
+    date_utc8_end = "2022-04-21"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
-    # # event_type = "acceptCoupon"
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
-    # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id})
+    # # # event_type = "acceptCoupon"
+    # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
+    # # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id})
+    # df = tracking.get_df(web_id, data_list_filter, 'purchase')
+    df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'}),
+                                         'purchase')
+
+
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'})
+    dict_settings_all = TrackingParser.fetch_parse_key_all_settings()
+    for data_dict in data_list_filter:
+        object_dict_list = TrackingParser.parse_rename_object_all(data_dict, dict_settings_all, 'purchase')
     # web_id_all = list(set([data['web_id'] for data in data_list_filter]))
     # x = []
     # for web_id in web_id_all:
