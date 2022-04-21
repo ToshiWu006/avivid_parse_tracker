@@ -33,7 +33,7 @@ class MySqlHelper:
         -------
 
         """
-        if df.shape[0]==0:
+        if type(df)==type(None) or df.shape[0]==0:
             print("no available dat to import")
         else:
             query = MySqlHelper.generate_update_SQLquery(df, table)
