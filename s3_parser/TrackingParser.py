@@ -411,10 +411,8 @@ class TrackingParser:
                         value = '_' if key_2nd == 'empty' else dict_object[key_2nd]
                     elif key_2nd=='json': ## use json.loads() => i3fresh case
                         ## may not json type
-                        try:
-                            value = json.loads(value)
-                        except  Exception as e:
-                            value = '_'
+                        value = json.loads(value)
+
                     elif type(value) == dict:  ## 2nd, 3rd... level
                         value = '_' if key_2nd == 'empty' else value[key_2nd]
                         if value is None:
@@ -475,6 +473,10 @@ class TrackingParser:
             ## for dealing with adding 'purchase' key in purchase (91app, lovingfamily)
             if key_join_list[0].split('.')[0] not in dict_object.keys():
                 dict_object = list(dict_object.values())[0]
+        else:
+            if key_join_list[0].split('.')[0] not in dict_object.keys():
+                print(f"{key_join_list[0].split('.')[0]} not in {dict_object}, return []")
+                return []
         ## skip dict_object is not dict
         if type(dict_object)!=dict:
             return []
@@ -871,7 +873,7 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "lovingfamily" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "i3fresh" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
     date_utc8_start = "2022-05-09"
@@ -886,8 +888,8 @@ if __name__ == "__main__":
 
 
 
-    # df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'}),
-    #                                      'purchase')
+    df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'}),
+                                         'purchase')
     #
     #
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'})
