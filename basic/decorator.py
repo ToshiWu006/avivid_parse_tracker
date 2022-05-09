@@ -28,7 +28,7 @@ def logging_channels(channel_name_list=[], report_args=True, n_args=2, save_slac
                     error = e
                 # error = traceback.format_exc()
                 if report_args:
-                    message = f"Error Message: ```{error}```\nTrigger By Function: ```{func.__name__}{args[:n_args]}...``` Raise Error in Path: ```{func.__code__.co_filename}```\nPlase Check"
+                    message = f"Error Message: ```{error}```\nTrigger By Function: ```{func.__name__}{args[:(n_args-1)]}...``` Raise Error in Path: ```{func.__code__.co_filename}```\nPlase Check"
                 else:
                     message = f"Error Message: ```{error}```\nTrigger By Function: ```{func.__name__}``` Raise Error in Path: ```{func.__code__.co_filename}```\nPlase Check"
                 if save_local:
