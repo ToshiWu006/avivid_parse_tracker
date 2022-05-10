@@ -334,9 +334,6 @@ class TrackingParser:
 
     @staticmethod
     def parse_rename_record_user(data_dict):
-        record_user_dict = data_dict['record_user']
-        if type(record_user_dict)==str:
-            record_user_dict = json.loads(record_user_dict)
         key_list = ['dv', 'ul', 'un', 'm_t', 's_h',
                     'w_ih', 't_p', 's_d', 's_d_', 'c_c',
                     'c_c_t', 't_nm', 't_ns', 't_nc', 'mt_nm',
@@ -359,6 +356,12 @@ class TrackingParser:
                            'max_time_no_click_last', 'max_scroll_depth_last', 'landing_count',
                            'is_addCart', 'is_removeCart', 'is_purchased_before']
         record_dict = {}
+        if 'record_user' not in data_dict.keys():
+            record_dict = {key:-1 for key in key_rename_list}
+            return record_dict
+        record_user_dict = data_dict['record_user']
+        if type(record_user_dict)==str:
+            record_user_dict = json.loads(record_user_dict)
         for key, key_rename in zip(key_list, key_rename_list):
             if key in record_user_dict.keys():
                 record_dict.update({key_rename: record_user_dict[key]})
@@ -876,20 +879,24 @@ if __name__ == "__main__":
     web_id = "i3fresh" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-05-09"
-    date_utc8_end = "2022-05-09"
+    date_utc8_start = "2022-05-10"
+    date_utc8_end = "2022-05-10"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
     # # # event_type = "acceptCoupon"
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'})
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'acceptCoupon'}) # sendCoupon, acceptCoupon, discardCoupon
     # # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id})
     df = tracking.get_df(web_id, data_list_filter, 'purchase')
 
+    df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser(None, date_utc8_start, date_utc8_end).get_three_coupon_events_df()
+
+    # df_sendCoupon = tracking.get_df(web_id, data_list, 'sendCoupon')
 
 
-    df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'}),
-                                         'purchase')
+
+    # df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'}),
+    #                                      'purchase')
     #
     #
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'purchase'})
