@@ -254,7 +254,7 @@ if __name__ == "__main__":
     AmazonS3('elephants3').upload_tracker_data(datetime_utc0=datetime_lastHour)
     ## save six events to db including drop_duplicates (by web_id)
     web_id_all = fetch_enable_analysis_web_id()
-    date_utc8 = datetime_to_str(datetime.datetime.utcnow()+datetime.timedelta(hours=8))
+    date_utc8 = datetime_to_str(datetime.datetime.utcnow()+datetime.timedelta(hours=8-1))
     df_args = parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter)
     df_args = list(df_args)
     df_stat_all = df_args.pop()
