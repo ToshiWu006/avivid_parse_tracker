@@ -1,6 +1,6 @@
 from basic import datetime_to_str, timing, logging_channels, datetime_range, filterListofDictByDict, to_datetime
 from definitions import ROOT_DIR
-from db import MySqlHelper
+from db import DBhelper
 import datetime, os, pickle, json
 import pandas as pd
 import re
@@ -154,7 +154,7 @@ class TrackingParser:
             query = f"""SELECT {','.join(columns)} FROM {table} WHERE date_time BETWEEN '{self.date_utc8_start}' and '{self.date_utc8_end}' 
                         and web_id='{self.web_id}'"""
         print(query)
-        data = MySqlHelper('tracker').ExecuteSelect(query)
+        data = DBhelper('tracker').ExecuteSelect(query)
         df = pd.DataFrame(data, columns=columns)
         return df
 
@@ -577,7 +577,7 @@ class TrackingParser:
                             parsed_removeCart_key, parsed_removeCart_key_rename
                             FROM cdp_tracking_settings where web_id='{web_id}'"""
         print(query)
-        data = MySqlHelper("rheacache-db0").ExecuteSelect(query)
+        data = DBhelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
         settings = [x.split(',') for x in data[0]]
         dict_settings = {}
         for i,event_type in enumerate(['purchase', 'addCart', 'removeCart']):
@@ -591,7 +591,7 @@ class TrackingParser:
                             parsed_removeCart_key, parsed_removeCart_key_rename
                             FROM cdp_tracking_settings where enable_analysis=1"""
         print(query)
-        data = MySqlHelper("rheacache-db0").ExecuteSelect(query)
+        data = DBhelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
         dict_settings_all = {}
         for d in data:
             web_id = d[0]

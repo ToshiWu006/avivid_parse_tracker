@@ -1,5 +1,5 @@
 from s3_parser import AmazonS3, TrackingParser
-from db import MySqlHelper, DBhelper
+from db import DBhelper
 from basic import datetime_to_str, to_datetime, timing, logging_channels, datetime_range, filterListofDictByDict
 from definitions import ROOT_DIR
 import datetime, os, pickle
@@ -171,31 +171,31 @@ def parseSave_couponEvents_collectStat(date_utc8, data_list_filter):
 def save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased):
     db = 'tracker'
     ## load events
-    DBhelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000)
     ## leave events
-    DBhelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000)
     ## timeout events
-    DBhelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000)
     ## addCart events
-    DBhelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000)
     ## removeCart events
-    DBhelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000)
     ## removeCart events
-    DBhelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000)
 
 @logging_channels(['clare_test'], report_args=False)
 @timing
 def save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_discardCoupon):
     db = 'tracker'
     ## sendCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000)
     ## acceptCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000)
     ## discardCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000, is_ssh=True)
+    DBhelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
 
 
-def get_weg_id_df(df, web_id):
+def get_web_id_df(df, web_id):
     if df.shape[0]==0:
         return pd.DataFrame()
     else:
@@ -214,7 +214,7 @@ def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCar
                    'n_events_addCart', 'n_uuid_addCart', 'n_events_removeCart', 'n_uuid_removeCart',
                    'n_events_purchase', 'n_uuid_purchase']
         for i, df in enumerate(df_list):
-            df = get_weg_id_df(df, web_id)
+            df = get_web_id_df(df, web_id)
             if df.shape[0] == 0:
                 n_events, n_uuid = 0, 0
             else:
