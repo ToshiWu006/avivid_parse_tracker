@@ -171,28 +171,28 @@ def parseSave_couponEvents_collectStat(date_utc8, data_list_filter):
 def save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased):
     db = 'tracker'
     ## load events
-    DBhelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000, is_ssh=True)
     ## leave events
-    DBhelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000, is_ssh=True)
     ## timeout events
-    DBhelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000, is_ssh=True)
     ## addCart events
-    DBhelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000, is_ssh=True)
     ## removeCart events
-    DBhelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000, is_ssh=True)
     ## removeCart events
-    DBhelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000, is_ssh=True)
 
 @logging_channels(['clare_test'], report_args=False)
 @timing
 def save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_discardCoupon):
     db = 'tracker'
     ## sendCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000, is_ssh=True)
     ## acceptCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000, is_ssh=True)
     ## discardCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000, is_ssh=True)
 
 
 def get_weg_id_df(df, web_id):
