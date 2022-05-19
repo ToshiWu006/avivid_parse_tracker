@@ -1,5 +1,5 @@
 from s3_parser import AmazonS3, TrackingParser
-from db import MySqlHelper
+from db import MySqlHelper, DBhelper
 from basic import datetime_to_str, to_datetime, timing, logging_channels, datetime_range, filterListofDictByDict
 from definitions import ROOT_DIR
 import datetime, os, pickle
@@ -77,7 +77,7 @@ def fetch_enable_analysis_web_id():
     query = f"""SELECT web_id
                         FROM cdp_tracking_settings where enable_analysis=1"""
     print(query)
-    data = MySqlHelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
+    data = DBhelper("rheacache-db0", is_ssh=True).ExecuteSelect(query)
     web_id_list = [d[0] for d in data]
     return web_id_list
 
@@ -131,8 +131,8 @@ def get_tracker_statistics(web_id, date, df_loaded, df_leaved, df_timeout, df_ad
 @timing
 def save_tracker_statistics(df_stat):
     if df_stat.shape[0]!=0:
-        query = MySqlHelper.generate_insertDup_SQLquery(df_stat, 'clean_event_stat', df_stat.columns[1:])
-        MySqlHelper('tracker').ExecuteUpdate(query, df_stat.to_dict('records'))
+        query = DBhelper.generate_insertDup_SQLquery(df_stat, 'clean_event_stat', df_stat.columns[1:])
+        DBhelper('tracker').ExecuteUpdate(query, df_stat.to_dict('records'))
     else:
         print("no available data")
 
@@ -171,28 +171,28 @@ def parseSave_couponEvents_collectStat(date_utc8, data_list_filter):
 def save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased):
     db = 'tracker'
     ## load events
-    MySqlHelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000)
     ## leave events
-    MySqlHelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000)
     ## timeout events
-    MySqlHelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000)
     ## addCart events
-    MySqlHelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000)
     ## removeCart events
-    MySqlHelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000)
     ## removeCart events
-    MySqlHelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000)
 
 @logging_channels(['clare_test'], report_args=False)
 @timing
 def save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_discardCoupon):
     db = 'tracker'
     ## sendCoupon events
-    MySqlHelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000)
     ## acceptCoupon events
-    MySqlHelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000)
     ## discardCoupon events
-    MySqlHelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
+    DBhelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
 
 
 def get_weg_id_df(df, web_id):
