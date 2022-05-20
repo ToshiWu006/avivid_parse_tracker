@@ -26,7 +26,7 @@ def collectLastHour():
 #     data_list_filter = s3.dumpDateDataFilter(date, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
 #     return data_list_filter
 
-## store 30days
+## store n_day
 @logging_channels(['clare_test'])
 def delete_expired_folder(n_day=30):
     root_folder = datetime_to_str(datetime.datetime.utcnow()-datetime.timedelta(days=n_day), pattern="%Y/%m/%d")
@@ -36,22 +36,6 @@ def delete_expired_folder(n_day=30):
         print(f"remove folder at {path_folder}")
     else:
         print("folder does not exist")
-
-
-def get_data_by_date(date_utc0):
-    file_list = get_a_day_file_list(date_utc0)
-    data_list = []
-    for file in file_list:
-        if os.path.isfile(file):
-            with open(file, 'rb') as f:
-                data_list += pickle.load(f)
-    return data_list
-
-
-def get_a_day_file_list(date_utc0):
-    datetime_list = datetime_range(date_utc0, hour_sep=1)[:-1]
-    file_list = [os.path.join(ROOT_DIR, "s3data", datetime_to_str(root_folder, pattern="%Y/%m/%d/%H"), "rawData.pickle") for root_folder in datetime_list]
-    return file_list
 
 # def get_file_byHour(date_utc0, hour_utc0='00'):
 #     """
@@ -136,70 +120,20 @@ def save_tracker_statistics(df_stat):
     else:
         print("no available data")
 
-@logging_channels(['clare_test'], n_args=2)
-@timing
-def parseSave_sixEvents_collectStat(web_id, date_utc8, data_list_filter):
-    # tracking = TrackingParser(web_id, date_utc8, date_utc8)
-    ## add six events df to instance
-    ## 1. get six df this hour
-    df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour = TrackingParser().get_six_events_df(
-        web_id, data_list=data_list_filter, use_db=False)
-    save_six_clean_events(df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour)
-    ## save statistics to table, clean_event_stat
-    ## 2. refresh df to update statistics today
-    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = TrackingParser(web_id, date_utc8, date_utc8).get_six_events_df(use_db=False)
-    df_stat = get_tracker_statistics(web_id, date_utc8, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart,
-                                     df_purchased)
-    df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(
-        set(df_loaded.query("is_purchased_before==1")['uuid']))
-    df_stat['n_uuid_purchase_purchased_before'] = 0 if df_purchased.shape[0] == 0 else len(
-        set(df_purchased.query("is_purchased_before==1")['uuid']))
-    return df_stat
-
-@timing
-def parseSave_couponEvents_collectStat(date_utc8, data_list_filter):
-    ## 1. save clean events this hour (data_list_filter)
-    df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour = TrackingParser().get_three_coupon_events_df(web_id=None, data_list=data_list_filter, use_db=False)
-    save_three_clean_coupon_events_toSQL(df_sendCoupon_hour, df_acceptCoupon_hour, df_discardCoupon_hour)
-    ## 2. update clean events statistics today (date_utc8)
-    df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser(None, date_utc8, date_utc8).get_three_coupon_events_df()
-    df_coupon_stat_all = get_coupon_events_statistics(date_utc8, df_sendCoupon, df_acceptCoupon, df_discardCoupon)
-    return df_coupon_stat_all
-
-@logging_channels(['clare_test'], report_args=False)
-@timing
-def save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased):
-    db = 'tracker'
-    ## load events
-    DBhelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000)
-    ## leave events
-    DBhelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000)
-    ## timeout events
-    DBhelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000)
-    ## addCart events
-    DBhelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000)
-    ## removeCart events
-    DBhelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000)
-    ## removeCart events
-    DBhelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000)
-
-@logging_channels(['clare_test'], report_args=False)
-@timing
-def save_three_clean_coupon_events_toSQL(df_sendCoupon, df_acceptCoupon, df_discardCoupon):
-    db = 'tracker'
-    ## sendCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_sendCoupon, db, 'clean_event_sendCoupon', chunk_size=100000)
-    ## acceptCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_acceptCoupon, db, 'clean_event_acceptCoupon', chunk_size=100000)
-    ## discardCoupon events
-    DBhelper.ExecuteUpdatebyChunk(df_discardCoupon, db, 'clean_event_discardCoupon', chunk_size=100000)
-
 
 def get_web_id_df(df, web_id):
     if df.shape[0]==0:
         return pd.DataFrame()
     else:
         return df.query(f"web_id=='{web_id}'")
+
+
+@logging_channels(['clare_test'], report_args=False)
+@timing
+def save_clean_events(*df_all, event_type_list):
+    db = 'tracker'
+    for df, event_type in zip(df_all, event_type_list):
+        DBhelper.ExecuteUpdatebyChunk(df, db, f"clean_event_{event_type}", chunk_size=100000)
 
 
 @timing
@@ -229,18 +163,17 @@ def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCar
         df_stat_all = pd.concat([df_stat_all, df_stat])
     return df_stat_all
 
-@logging_channels(['clare_test'], n_args=1)
+@logging_channels(['clare_test'], report_args=False)
 @timing
-def parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter):
-    ## add six events df to instance
-    ## 1. get six df this hour for all web_id at a time
-    df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour = TrackingParser().get_six_events_df_all(data_list_filter)
-    ## save statistics to table, clean_event_stat
-    ## 2. refresh df to update statistics today
-    df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = TrackingParser(None, date_utc8, date_utc8).get_six_events_df_all(use_db=False)
-    df_stat_all = get_tracker_statistics_all(date_utc8, df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart,
-                                     df_purchased)
-    return df_loaded_hour, df_leaved_hour, df_timeout_hour, df_addCart_hour, df_removeCart_hour, df_purchased_hour, df_stat_all
+def update_statistics_table():
+    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase', 'sendCoupon', 'acceptCoupon', 'discardCoupon']
+    df_list = TrackingParser.get_multiple_df(event_type_list, date_utc8, date_utc8)
+
+    df_stat_all = get_tracker_statistics_all(date_utc8, *df_list[:-3])
+    df_coupon_stat_all = get_coupon_events_statistics(date_utc8, *df_list[-3:])
+    save_tracker_statistics(df_stat_all)
+    save_tracker_statistics(df_coupon_stat_all)
+    return df_stat_all, df_coupon_stat_all
 
 
 
@@ -255,13 +188,12 @@ if __name__ == "__main__":
     ## save six events to db including drop_duplicates (by web_id)
     web_id_all = fetch_enable_analysis_web_id()
     date_utc8 = datetime_to_str(datetime.datetime.utcnow()+datetime.timedelta(hours=8-1))
-    df_args = parseSave_sixEvents_collectStat_all(date_utc8, data_list_filter)
-    df_args = list(df_args)
-    df_stat_all = df_args.pop()
-    save_six_clean_events(*df_args)
-    save_tracker_statistics(df_stat_all)
-    ## save three coupon events and coupon statistics
-    df_coupon_stat_all = parseSave_couponEvents_collectStat(date_utc8, data_list_filter)
-    save_tracker_statistics(df_coupon_stat_all)
+    ## get all df(9 events) this hour for all web_id
+    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase', 'sendCoupon', 'acceptCoupon', 'discardCoupon']
+    df_hour_list = TrackingParser.get_multiple_df(data_list=data_list_filter, event_type_list=event_type_list)
+    ## save 9 events to db
+    save_clean_events(*df_hour_list, event_type_list=event_type_list)
+    ## statistics
+    df_stat_all, df_coupon_stat_all = update_statistics_table()
     ## delete folder at today_utc0-n
     delete_expired_folder(14)
