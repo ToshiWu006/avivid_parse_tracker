@@ -1,6 +1,7 @@
 from s3_parser import TrackingParser
 from db import DBhelper
-from import_tracker_data_byHour import save_six_clean_events
+from basic import date_range, to_datetime
+from import_tracker_data_byHour import save_six_clean_events, save_clean_events
 import datetime, argparse
 
 
@@ -19,44 +20,35 @@ if __name__ == "__main__":
     event_type = args.event_type
     print(f"import events form local, web_id: {web_id} and date from '{date_start}' to '{date_end}'")
 
-    if date_start == None or date_end == None:
+    if date_start==None or date_end==None:
         ## default import last hour
         date_start = datetime.datetime.utcnow() + datetime.timedelta(days=-1, hours=8)
         date_end = datetime.datetime.utcnow() + datetime.timedelta(days=-1, hours=8)
+        ## to str
         date_start, date_end = datetime.datetime.strftime(date_start, "%Y-%m-%d"), datetime.datetime.strftime(date_end, "%Y-%m-%d")
         # tracking = TrackingParser(web_id, date_utc8, date_utc8)
-
-    if web_id==None:
-        tracking = TrackingParser(date_start, date_end)
-        df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df_all(tracking.data_list)  # get_six_events_df_all
-
-    else:
-        tracking = TrackingParser(web_id, date_start, date_end)
-        ## add six events df to instance
-        df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased = tracking.get_six_events_df()
-
-    if event_type==None:
-        ## import all events
-        save_six_clean_events(df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased)
-    else:
-        db = 'tracker'
-        if event_type=='load':
-            ## load events
-            DBhelper.ExecuteUpdatebyChunk(df_loaded, db, 'clean_event_load', chunk_size=100000)
-        elif event_type=='leave':
-            ## leave events
-            DBhelper.ExecuteUpdatebyChunk(df_leaved, db, 'clean_event_leave', chunk_size=100000)
-        elif event_type == 'timeout':
-            ## timeout events
-            DBhelper.ExecuteUpdatebyChunk(df_timeout, db, 'clean_event_timeout', chunk_size=100000)
-        elif event_type == 'addCart':
-            ## addCart events
-            DBhelper.ExecuteUpdatebyChunk(df_addCart, db, 'clean_event_addCart', chunk_size=100000)
-        elif event_type == 'removeCart':
-            ## removeCart events
-            DBhelper.ExecuteUpdatebyChunk(df_removeCart, db, 'clean_event_removeCart', chunk_size=100000)
-        elif event_type == 'purchase':
-            ## removeCart events
-            DBhelper.ExecuteUpdatebyChunk(df_purchased, db, 'clean_event_purchase', chunk_size=100000)
-
+    num_days = (to_datetime(date_end) - to_datetime(date_start)).days+1
+    date_list = date_range(date_start, num_days=num_days)
+    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
+                       'sendCoupon', 'acceptCoupon', 'discardCoupon']
+    for date in date_list:
+        ## enter web_id and event_type
+        if web_id and event_type:
+            print(f"date: {date}, input web_id: {web_id} and event_type: {event_type}")
+            event_type_list = [event_type]
+            df_list = TrackingParser.get_multiple_df(event_type_list, date, date, web_id)
+        ## enter web_id only, get all events
+        elif web_id and not event_type:
+            print(f"date: {date}, input web_id: {web_id} only and event_type: {event_type}")
+            df_list = TrackingParser.get_multiple_df(event_type_list, date, date, web_id)
+        ## enter event_type only
+        elif not web_id and event_type:
+            print(f"date: {date}, input web_id: {web_id} and event_type: {event_type} only")
+            event_type_list = [event_type]
+            df_list = TrackingParser.get_multiple_df(event_type_list, date, date)
+        ## both are not entered, get all events and all web_id
+        else:
+            print(f"date: {date}, not input web_id: {web_id} and event_type: {event_type}")
+            df_list = TrackingParser.get_multiple_df(event_type_list, date, date)
+        save_clean_events(*df_list, event_type_list=event_type_list)
 
