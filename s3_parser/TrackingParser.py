@@ -128,7 +128,7 @@ class TrackingParser:
             self.reformat_shipping_price(df, col='product_price', inplace=True)
             self.reformat_shipping_price(df, col='total_price', inplace=True)
             self.reformat_shipping_price(df, col='shipping_price', inplace=True)
-        elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout':
+        elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout' or event_type=='acceptCoupon' or event_type=='discardCoupon':
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) for data in df['max_time_no_scroll_depth_array']]
         elif event_type=='sendCoupon':
@@ -876,22 +876,22 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "i3fresh" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "popsmile" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-05-10"
-    date_utc8_end = "2022-05-10"
+    date_utc8_start = "2022-05-20"
+    date_utc8_end = "2022-05-20"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
     # # # event_type = "acceptCoupon"
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type":'acceptCoupon'}) # sendCoupon, acceptCoupon, discardCoupon
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'acceptCoupon'}) # sendCoupon, acceptCoupon, discardCoupon
     # # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id})
-    df = tracking.get_df(web_id, data_list_filter, 'purchase')
+    # df = tracking.get_df(web_id, data_list_filter, 'purchase')
 
     df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser(None, date_utc8_start, date_utc8_end).get_three_coupon_events_df()
 
-    # df_sendCoupon = tracking.get_df(web_id, data_list, 'sendCoupon')
+    # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'acceptCoupon')
 
 
 
