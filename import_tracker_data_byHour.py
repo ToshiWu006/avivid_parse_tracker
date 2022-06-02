@@ -189,7 +189,8 @@ if __name__ == "__main__":
     web_id_all = fetch_enable_analysis_web_id()
     date_utc8 = datetime_to_str(datetime.datetime.utcnow()+datetime.timedelta(hours=8-1))
     ## get all df(9 events) this hour for all web_id
-    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase', 'sendCoupon', 'acceptCoupon', 'discardCoupon']
+    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
+                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon']
     df_hour_list = TrackingParser.get_multiple_df(data_list=data_list_filter, event_type_list=event_type_list)
     ## save 9 events to db
     save_clean_events(*df_hour_list, event_type_list=event_type_list)

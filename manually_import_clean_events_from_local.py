@@ -1,7 +1,7 @@
 from s3_parser import TrackingParser
 from db import DBhelper
 from basic import date_range, to_datetime
-from import_tracker_data_byHour import save_six_clean_events, save_clean_events
+from import_tracker_data_byHour import save_clean_events
 import datetime, argparse
 
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     num_days = (to_datetime(date_end) - to_datetime(date_start)).days+1
     date_list = date_range(date_start, num_days=num_days)
     event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
-                       'sendCoupon', 'acceptCoupon', 'discardCoupon']
+                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon']
     for date in date_list:
         ## enter web_id and event_type
         if web_id and event_type:
