@@ -30,7 +30,7 @@ if __name__ == "__main__":
     num_days = (to_datetime(date_end) - to_datetime(date_start)).days+1
     date_list = date_range(date_start, num_days=num_days)
     event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
-                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon']
+                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon', 'acceptAf']
     for date in date_list:
         ## enter web_id and event_type
         if web_id and event_type:

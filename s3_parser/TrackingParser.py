@@ -11,11 +11,12 @@ class TrackingParser:
         self.web_id = web_id
         self.event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart',
                                 'purchase', 'sendCoupon', 'acceptCoupon', 'discardCoupon',
-                                'enterCoupon']
+                                'enterCoupon', 'acceptAf']
         self.dict_object_key = {"load":"load", "leave":"", "timeout":"",
                                 "addCart":"cart", "removeCart":"remove_cart", "purchase":"purchase",
                                 "sendCoupon":"coupon_info", "acceptCoupon":"coupon_info",
-                                "discardCoupon":"coupon_info", "enterCoupon":"coupon_info"}
+                                "discardCoupon":"coupon_info", "enterCoupon":"coupon_info",
+                                "acceptAf":"adaf_info"}
         self.dict_settings = self.fetch_parse_key_settings(web_id)
         self.dict_settings_all = None
         # self.dict_settings_all = self.fetch_parse_key_all_settings()
@@ -40,7 +41,7 @@ class TrackingParser:
         event_type_list   : list, available event_type: 'load', 'leave', 'timeout',
                                                         'addCart', 'removeCart', 'purchase',
                                                         'sendCoupon', 'acceptCoupon', 'discardCoupon',
-                                                        'enterCoupon'
+                                                        'enterCoupon', 'acceptAf'
         web_id            : str, None for all web_id
         data_list         : list, None for get data_list by date_utc8_start and date_utc8_end
         use_db            : bool, fetch from db(True) or from local(False)
@@ -79,7 +80,7 @@ class TrackingParser:
         web_id
         data_list         : list of dict which to be appended
         event_type        : load, leave, addCart, removeCart, purchase,
-                            sendCoupon, acceptCoupon, discardCoupon, enterCoupon
+                            sendCoupon, acceptCoupon, discardCoupon, enterCoupon, acceptAf
         dict_settings_all : settings of all web_id for addCar, removeCar and purchase events
 
         Returns
@@ -115,6 +116,9 @@ class TrackingParser:
         # elif event_type=='sendCoupon' or event_type=='acceptCoupon' or event_type=='discardCoupon':
             for data_dict in data_list_filter:
                 dict_list += cls.fully_parse_coupon(data_dict, event_type)
+        elif event_type=='acceptAf':
+            for data_dict in data_list_filter:
+                dict_list += cls.fully_parse_afad(data_dict, event_type)
         else:
             print("not a valid event")
             return pd.DataFrame()  ## early return
@@ -248,7 +252,7 @@ class TrackingParser:
         universial_dict.update(record_dict)
         return [universial_dict]
 
-    ## leaved and timeout event
+    ## coupon related events
     @classmethod
     def fully_parse_coupon(cls, data_dict, event_type):
         universial_dict = cls.parse_rename_universial(data_dict)
@@ -260,6 +264,16 @@ class TrackingParser:
             record_dict = cls.parse_rename_record_user(data_dict)
             universial_dict.update(coupon_info_dict)
             universial_dict.update(record_dict)
+        return [universial_dict]
+
+    ## addfan_ad related events
+    @classmethod
+    def fully_parse_afad(cls, data_dict, event_type):
+        universial_dict = cls.parse_rename_universial(data_dict)
+        afad_info_dict = cls.parse_rename_afad_info(data_dict, event_type)
+        record_dict = cls.parse_rename_record_user(data_dict)
+        universial_dict.update(afad_info_dict)
+        universial_dict.update(record_dict)
         return [universial_dict]
 
     @staticmethod
@@ -426,6 +440,23 @@ class TrackingParser:
             else:
                 coupon_info_dict.update({key_rename: -1})
         return coupon_info_dict
+
+    @staticmethod
+    def parse_rename_afad_info(data_dict, event_type):
+        if 'afad_info' not in data_dict.keys():
+            print(f"'afad_info' not in {data_dict}, return []")
+            return []
+        dict_object = data_dict['afad_info']
+        if event_type=='acceptAf':
+            key_list = ['l_b', 'p_p', 'a_i', 'w_t']
+            key_rename_list = ['lower_bound', 'prob_purchase', 'ad_id', 'website_type']
+        afad_info_dict = {}
+        for key,key_rename in zip(key_list,key_rename_list):
+            if key in dict_object.keys():
+                afad_info_dict.update({key_rename: dict_object[key]})
+            else:
+                afad_info_dict.update({key_rename: -1})
+        return afad_info_dict
 
     @staticmethod
     @timing
@@ -747,29 +778,27 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "blueseeds" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "bamboo" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-06-02"
-    date_utc8_end = "2022-06-02"
+    date_utc8_start = "2022-06-06"
+    date_utc8_end = "2022-06-06"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
     # # # # event_type = "acceptCoupon"
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'enterCoupon'}) # sendCoupon, acceptCoupon, discardCoupon
+    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'acceptAf'}) # sendCoupon, acceptCoupon, discardCoupon
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": "acceptCoupon"})
-    # df = tracking.get_df(web_id, data_list_filter, 'purchase')
-    # df_sendCoupon, df_acceptCoupon, df_discardCoupon = TrackingParser(None, date_utc8_start, date_utc8_end).get_three_coupon_events_df()
-    # df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'blueseeds', data_list_filter, 'enterCoupon')
-    # query = DBhelper.generate_insertDup_SQLquery(df2, 'clean_event_enterCoupon', ['coupon_code'])
-    # DBhelper('tracker').ExecuteUpdate(query, df2.to_dict('records'))
+    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'bamboo', data_list_filter, 'acceptAf')
+    query = DBhelper.generate_insertDup_SQLquery(df2, 'clean_event_acceptAf', ['ad_id'])
+    DBhelper('tracker').ExecuteUpdate(query, df2.to_dict('records'))
 
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'acceptCoupon')
     # df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'letsharu', data_list_filter, 'purchase')
     # df3 = TrackingParser.get_df_from_db('2022-05-19 00:00:00', '2022-05-19 02:00:00',
     #                                     web_id=None, event_type='purchase')
 
-    # df_list = TrackingParser.get_multiple_df(['acceptCoupon'], "2022-05-10", "2022-05-10")
+    df_list = TrackingParser.get_multiple_df(['acceptAf'], "2022-06-06", "2022-06-06")
     # df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'}),
     #                                      'purchase')
     #
