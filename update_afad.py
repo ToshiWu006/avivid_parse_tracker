@@ -37,12 +37,13 @@ def fetch_afad_activity_just_expired():
 @timing
 def fetch_af_count(web_id, ad_id, activity_start, activity_end):
     query = f"""
-    SELECT ad_id, count(distinct uuid) as addfan_growth FROM tracker.clean_event_acceptAf
+    SELECT count(distinct uuid) as addfan_growth FROM tracker.clean_event_acceptAf
     WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
     AND web_id='{web_id}' AND ad_id='{ad_id}'    
     """
     data = DBhelper("tracker").ExecuteSelect(query)
-    df_count = pd.DataFrame(data, columns=['id', 'addfan_growth'])
+    df_count = pd.DataFrame(data, columns=['addfan_growth'])
+    df_count['id'] = [ad_id] * df_count.shape[0]
     return df_count
 
 
