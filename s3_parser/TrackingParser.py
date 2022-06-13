@@ -563,8 +563,8 @@ class TrackingParser:
 
     @staticmethod
     def reformat_remove_str2num(df, col='shipping_price', inplace=False, reformat_value=0):
-        # all integer
-        regex = "^-?\d+$"
+        # all integers and floats
+        regex = "^-?\d+$|[\d\.\d]+"
         if col in df.columns:
             if inplace:
                 # df[col] = [0 if re.findall("[0-9]", str(x)) == [] else int(float(str(x).replace(',',''))) for x in df[col]]
@@ -778,27 +778,29 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "bamboo" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "greatshop" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-06-06"
-    date_utc8_end = "2022-06-06"
+    date_utc8_start = "2022-06-12"
+    date_utc8_end = "2022-06-12"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
     # # # # event_type = "acceptCoupon"
-    data_list_filter = filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'acceptAf'}) # sendCoupon, acceptCoupon, discardCoupon
+    data_list_filter = filterListofDictByDict(data_list,
+                                              dict_criteria={"web_id": web_id,
+                                                            "event_type":'purchase'}) # sendCoupon, acceptCoupon, discardCoupon
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": "acceptCoupon"})
-    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'bamboo', data_list_filter, 'acceptAf')
-    query = DBhelper.generate_insertDup_SQLquery(df2, 'clean_event_acceptAf', ['ad_id'])
-    DBhelper('tracker').ExecuteUpdate(query, df2.to_dict('records'))
+    # df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'bamboo', data_list_filter, 'acceptAf')
+    # query = DBhelper.generate_insertDup_SQLquery(df2, 'clean_event_acceptAf', ['ad_id'])
+    # DBhelper('tracker').ExecuteUpdate(query, df2.to_dict('records'))
 
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'acceptCoupon')
-    # df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'letsharu', data_list_filter, 'purchase')
+    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'greatshop', data_list_filter, 'purchase')
     # df3 = TrackingParser.get_df_from_db('2022-05-19 00:00:00', '2022-05-19 02:00:00',
     #                                     web_id=None, event_type='purchase')
 
-    df_list = TrackingParser.get_multiple_df(['acceptAf'], "2022-06-06", "2022-06-06")
+    # df_list = TrackingParser.get_multiple_df(['acceptAf'], "2022-06-06", "2022-06-06")
     # df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'}),
     #                                      'purchase')
     #
