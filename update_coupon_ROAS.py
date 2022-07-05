@@ -79,10 +79,23 @@ def fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end):
         AND date_time BETWEEN '{activity_start}' AND '{activity_end}'
     """
     print(query_accept)
+    query_imp = f"""
+    SELECT count(*) FROM (
+    SELECT a.uuid FROM
+        (SELECT uuid FROM tracker.clean_event_acceptCoupon
+        WHERE coupon_id = {coupon_id} AND date_time BETWEEN '{activity_start}' AND '{activity_end}') a 
+    UNION 
+    SELECT b.uuid FROM
+        (SELECT uuid FROM tracker.clean_event_discardCoupon
+        WHERE coupon_id = {coupon_id} AND date_time BETWEEN '{activity_start}' AND '{activity_end}') b) x
+    """
+    print(query_imp)
+
     data_sent = DBhelper("tracker").ExecuteSelect(query_sent)
     data_accept = DBhelper("tracker").ExecuteSelect(query_accept)
-    coupon_sent, coupon_accept = data_sent[0][0], data_accept[0][0]
-    return coupon_sent, coupon_accept
+    data_imp = DBhelper("tracker").ExecuteSelect(query_imp)
+    coupon_sent, coupon_accept, coupon_impression = data_sent[0][0], data_accept[0][0], data_imp[0][0]
+    return coupon_sent, coupon_accept, coupon_impression
 
 def fetch_calc_types():
     query = f"""
@@ -337,15 +350,15 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
 
 def get_n_coupon_stat(df_ROAS, coupon_id, activity_start, activity_end, coupon_total):
     coupon_used = int(df_ROAS['coupon_used'])
-    coupon_sent, coupon_accept = fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end)
-    df_ROAS[['coupon_sent', 'coupon_accept']] = [[coupon_sent, coupon_accept]]
+    coupon_sent, coupon_accept, coupon_impression = fetch_n_coupon_sent_accept(coupon_id, activity_start, activity_end)
+    df_ROAS[['coupon_sent', 'coupon_accept', 'coupon_impression']] = [[coupon_sent, coupon_accept, coupon_impression]]
     days_remain = (to_datetime(activity_end)-curdate(utc=8)).days
     df_ROAS['avg_n_coupon'] = [0] if days_remain==0 else [(coupon_total-coupon_used)/days_remain]
     return df_ROAS
 
 
 def update_ROAS(df_ROAS, is_save=True):
-    update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
+    update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_impression', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
     query_update = DBhelper.generate_insertDup_SQLquery(df_ROAS, 'addfan_activity', update_col)
     if is_save:
         DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query_update, df_ROAS.to_dict('records'))
