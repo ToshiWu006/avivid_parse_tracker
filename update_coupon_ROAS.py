@@ -201,7 +201,32 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             AND a.session_id = b.session_id
                         GROUP BY uuid , session_b) AS temp
                     """
-        elif type_cal_cost == 4: ## join three events, acceptCoupon, enterCoupon, purchase
+        elif type_cal_cost == 4: ## join three events, acceptCoupon, enterCoupon, purchase without same session
+            query = f"""
+                    SELECT
+                        IFNULL(SUM(temp.total),0) AS revenue, COUNT(temp.total) * {coupon_cost} AS cost, 
+                        COUNT(temp.total) as coupon_used
+                    FROM
+                        (SELECT
+                            a.uuid AS uuid,	b.session_id AS session_b, b.total
+                        FROM
+                            (SELECT * FROM tracker.clean_event_acceptCoupon
+                            WHERE date_time >= '{activity_start}'
+                            AND web_id = '{web_id}' AND coupon_id = '{coupon_id}') AS a
+                        INNER JOIN 
+                        (SELECT uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
+                        FROM tracker.clean_event_purchase WHERE
+                            date_time >= '{activity_start}' AND web_id = '{web_id}'
+                        GROUP BY uuid , session_id, timestamp
+                        HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b 
+                        ON a.uuid = b.uuid
+                        INNER JOIN 
+                        (SELECT uuid, session_id, coupon_code FROM tracker.clean_event_enterCoupon WHERE 
+                        date_time >= '{activity_start}' AND web_id = '{web_id}') AS c 
+                        on a.uuid=c.uuid AND a.coupon_code=c.coupon_code
+                        GROUP BY uuid , session_b) AS temp
+                    """
+        elif type_cal_cost == 5: ## join three events, acceptCoupon, enterCoupon, purchase
             query = f"""
                     SELECT
                         IFNULL(SUM(temp.total),0) AS revenue, COUNT(temp.total) * {coupon_cost} AS cost, 
@@ -301,6 +326,29 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         GROUP BY uuid , session_b) AS temp
                     """
         elif type_cal_cost==4: ## join three events, acceptCoupon, enterCoupon, purchase
+            query = f"""
+                    SELECT
+                        IFNULL(sum(temp.total_price),0) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost,
+                        COUNT(temp.total_price) as coupon_used
+                    FROM
+                        (SELECT
+                            a.uuid AS uuid, b.session_id AS session_b, b.total_price
+                        FROM
+                            (select * from tracker.clean_event_acceptCoupon WHERE 
+                            date_time >= '{activity_start}' AND 
+                            web_id='{web_id}' AND coupon_id='{coupon_id}') AS a
+                        INNER JOIN 
+                        (select * from tracker.clean_event_purchase where 
+                        date_time >= '{activity_start}' AND
+                        web_id='{web_id}' and total_price>{coupon_price_limit}) AS b 
+                        ON a.uuid = b.uuid
+                        INNER JOIN 
+                        (SELECT uuid, session_id, coupon_code FROM tracker.clean_event_enterCoupon WHERE 
+                        date_time >= '{activity_start}' AND web_id = '{web_id}') AS c 
+                        on a.uuid=c.uuid AND a.coupon_code=c.coupon_code
+                        GROUP BY uuid , session_b) AS temp
+                    """
+        elif type_cal_cost==5: ## join three events, acceptCoupon, enterCoupon, purchase
             query = f"""
                     SELECT
                         IFNULL(sum(temp.total_price),0) as revenue, COUNT(temp.total_price)*{coupon_cost} as cost,
