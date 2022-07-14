@@ -363,7 +363,7 @@ class TrackingParser:
             value = ''
             if len(key_list) == 1:  ##directly access dict
                 for k in key_list:  ## append -1 if key not found
-                    temp = dict_object[k] if k in dict_object.keys() else -1
+                    temp = dict_object[k] if k in dict_object.keys() or dict_object[k] else -1
                     if type(temp) == str or type(temp) == int:
                         collection_dict.update({key_rename: temp})
                     elif temp is None:
@@ -376,17 +376,17 @@ class TrackingParser:
             else:  ## parse multiple layer
                 for key_2nd in key_list:
                     if value == '':  ## 1st level
-                        value = '_' if key_2nd == 'empty' or key_2nd not in dict_object.keys() else dict_object[key_2nd]
+                        value = '_' if key_2nd == 'empty' or key_2nd not in dict_object.keys() or not dict_object[key_2nd] else dict_object[key_2nd]
                     elif key_2nd=='json': ## use json.loads() => i3fresh case
                         value = json.loads(value)
                     elif type(value) == dict:  ## 2nd, 3rd... level
-                        value = '_' if key_2nd == 'empty' else value[key_2nd]
+                        value = '_' if key_2nd == 'empty' or not value[key_2nd] else value[key_2nd]
                         collection_dict.update({key_rename: value})
                     elif type(value) == list:  ## 2nd, 3rd... level(parse list)
                         n_list = len(value)
                         for v in value: ## value: list [{k21:v21, k22:v22, k23:v23,...}]
                             if key_2nd in v.keys():
-                                value = '_' if key == 'empty' else v[key_2nd]
+                                value = '_' if key == 'empty' or not v[key_2nd] else v[key_2nd]
                             else: ## not in k21,k22,k23...
                                 value = '_'
                             value_list += [value]
@@ -778,11 +778,11 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "greatshop" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "nineyi11" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-06-12"
-    date_utc8_end = "2022-06-12"
+    date_utc8_start = "2022-07-14"
+    date_utc8_end = "2022-07-14"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
@@ -796,10 +796,25 @@ if __name__ == "__main__":
     # DBhelper('tracker').ExecuteUpdate(query, df2.to_dict('records'))
 
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'acceptCoupon')
-    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'greatshop', data_list_filter, 'purchase')
+    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'nineyi11', data_list, 'purchase')
     # df3 = TrackingParser.get_df_from_db('2022-05-19 00:00:00', '2022-05-19 02:00:00',
     #                                     web_id=None, event_type='purchase')
-
+    #
+    # data_dict = data_list_filter[0]
+    # dict_settings_all = TrackingParser.fetch_parse_key_all_settings()
+    # a = TrackingParser.fully_parse_object_all(data_dict, 'purchase', tracking.dict_settings)
+    #
+    # ## 1. parse common terms
+    # universial_dict = TrackingParser.parse_rename_universial(data_dict)
+    # ## 2. parse record_user terms
+    # record_dict = TrackingParser.parse_rename_record_user(data_dict)
+    # ## 3. parse cart, remove_cart or purchase terms
+    # object_dict_list = TrackingParser.parse_rename_object(data_dict, dict_settings_all, 'purchase')
+    # result_dict_list = []
+    # for object_dict in object_dict_list:
+    #     object_dict.update(universial_dict)
+    #     object_dict.update(record_dict)
+    #     result_dict_list += [object_dict]
     # df_list = TrackingParser.get_multiple_df(['acceptAf'], "2022-06-06", "2022-06-06")
     # df_all = TrackingParser().get_df_all(filterListofDictByDict(data_list, dict_criteria={"web_id": web_id, "event_type":'purchase'}),
     #                                      'purchase')
