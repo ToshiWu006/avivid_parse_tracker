@@ -363,7 +363,7 @@ class TrackingParser:
             value = ''
             if len(key_list) == 1:  ##directly access dict
                 for k in key_list:  ## append -1 if key not found
-                    temp = dict_object[k] if k in dict_object.keys() or dict_object[k] else -1
+                    temp = dict_object[k] if k in dict_object.keys() else -1
                     if type(temp) == str or type(temp) == int:
                         collection_dict.update({key_rename: temp})
                     elif temp is None:
