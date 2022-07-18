@@ -140,7 +140,7 @@ class AmazonS3 :
         try :
             return '['+self._bucket.Object(key=key).get()["Body"].read().decode().replace('}{','},{')+']'
         except :
-            return False
+            return '[]'
 
     def Dump(self, key, obj):
         """ Writing the S3 object from bucket """
