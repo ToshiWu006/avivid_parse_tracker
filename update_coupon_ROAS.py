@@ -126,7 +126,7 @@ FROM
 	GROUP BY uuid , session_b) AS temp
 """
 @timing
-def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, coupon_price_limit,
+def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, coupon_amount, coupon_price_limit,
                                    activity_start, activity_end, type_total_price, type_cal_cost):
     if type_total_price==0: ## use product_price * product_quantity
         if type_cal_cost==1: ## use coupon column to directly calculate cost (coupon column is value)
@@ -446,7 +446,7 @@ def main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit,
                             is_save=True):
     coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
     df_ROAS = fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type,
-                                            coupon_cost, coupon_price_limit,
+                                            coupon_cost, coupon_amount, coupon_price_limit,
                                             activity_start, activity_end,
                                             type_total_price, type_cal_cost)
     df_ROAS = get_n_coupon_stat(df_ROAS, coupon_id, activity_start, activity_end, coupon_total)
