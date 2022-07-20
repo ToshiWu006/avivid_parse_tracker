@@ -405,8 +405,9 @@ def get_n_coupon_stat(df_ROAS, coupon_id, activity_start, activity_end, coupon_t
     return df_ROAS
 
 
-def update_ROAS(df_ROAS, is_save=True):
-    update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_impression', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
+def update_ROAS(df_ROAS, is_save=True, update_col=None):
+    if not update_col:
+        update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_impression', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
     query_update = DBhelper.generate_insertDup_SQLquery(df_ROAS, 'addfan_activity', update_col)
     if is_save:
         DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query_update, df_ROAS.to_dict('records'))
@@ -454,36 +455,65 @@ def main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit,
 
     return df_ROAS
 
+
+@logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
+def fetch_ROAS_by_daily(coupon_id_list):
+    coupon_id_list = [str(id) for id in coupon_id_list]
+    if not coupon_id_list:
+        print("coupon_id_list is empty, do nothing")
+        return pd.DataFrame()
+    query = f"""
+    SELECT web_id, coupon_id, sum(coupon_imp), sum(coupon_accepted), sum(coupon_used), sum(cost), sum(revenue) 
+    FROM web_push.addfan_daily_ROAS WHERE coupon_id in ({','.join(coupon_id_list)}) group by coupon_id
+    """
+    data = DBhelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
+    columns = ['web_id', 'coupon_id', 'coupon_imp', 'coupon_accepted', 'coupon_used', 'cost', 'revenue']
+    df_ROAS = pd.DataFrame(data, columns=columns)
+    return df_ROAS
+
 if __name__ == "__main__":
-    ## type_total_price: 0(use price*quantity), 1,others(use total_price),
-    ## type_cal_cost: 0,others(use coupon_cost), 1(use coupon column in purchase_event table)
-    type_total_price_dict, type_cal_cost_dict = fetch_calc_types()
     df_coupon = fetch_coupon_activity_running()
-    # df_coupon = df_coupon.query(f"web_id=='coway'")
-    df_ROAS_all = pd.DataFrame()
-    for i,row in df_coupon.iterrows():
-        coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
-        type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
-        type_cal_cost = type_cal_cost_dict[web_id] if web_id in type_cal_cost_dict.keys() else 0
-        df_ROAS = main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit,
-                                          coupon_type, coupon_amount, coupon_total,
-                                          activity_start, activity_end,
-                                          type_total_price, type_cal_cost,
-                                          is_save=True)
-        df_ROAS_all = pd.concat([df_ROAS_all,df_ROAS])
-    ## update ROAS just expired
+    coupon_id_list = list(df_coupon['id'])
+    df_ROAS = fetch_ROAS_by_daily(coupon_id_list)
+    update_ROAS(df_ROAS, is_save=True, update_col=list(df_ROAS.columns))
+
+    # expired
     df_coupon_just_expired = fetch_coupon_activity_just_expired()
-    df_ROAS_expired_all = pd.DataFrame()
-    for i,row in df_coupon_just_expired.iterrows():
-        coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
-        type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
-        type_cal_cost = type_cal_cost_dict[web_id] if web_id in type_cal_cost_dict.keys() else 0
-        df_ROAS_expired = main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit,
-                                                  coupon_type, coupon_amount, coupon_total,
-                                                  activity_start, activity_end,
-                                                  type_total_price, type_cal_cost,
-                                                  is_save=True)
-        df_ROAS_expired_all = pd.concat([df_ROAS_expired_all,df_ROAS])
+    coupon_id_exp_list = list(df_coupon_just_expired['id'])
+    df_ROAS_expired = fetch_ROAS_by_daily(coupon_id_exp_list)
+    update_ROAS(df_ROAS_expired, is_save=True, update_col=list(df_ROAS_expired.columns))
+
+
+    #
+    # ## type_total_price: 0(use price*quantity), 1,others(use total_price),
+    # ## type_cal_cost: 0,others(use coupon_cost), 1(use coupon column in purchase_event table)
+    # type_total_price_dict, type_cal_cost_dict = fetch_calc_types()
+    # df_coupon = fetch_coupon_activity_running()
+    # # df_coupon = df_coupon.query(f"web_id=='coway'")
+    # df_ROAS_all = pd.DataFrame()
+    # for i,row in df_coupon.iterrows():
+    #     coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
+    #     type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
+    #     type_cal_cost = type_cal_cost_dict[web_id] if web_id in type_cal_cost_dict.keys() else 0
+    #     df_ROAS = main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit,
+    #                                       coupon_type, coupon_amount, coupon_total,
+    #                                       activity_start, activity_end,
+    #                                       type_total_price, type_cal_cost,
+    #                                       is_save=True)
+    #     df_ROAS_all = pd.concat([df_ROAS_all,df_ROAS])
+    # ## update ROAS just expired
+    # df_coupon_just_expired = fetch_coupon_activity_just_expired()
+    # df_ROAS_expired_all = pd.DataFrame()
+    # for i,row in df_coupon_just_expired.iterrows():
+    #     coupon_id, web_id, link_code, coupon_type, coupon_amount, activity_start, activity_end, coupon_total, coupon_price_limit = row
+    #     type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
+    #     type_cal_cost = type_cal_cost_dict[web_id] if web_id in type_cal_cost_dict.keys() else 0
+    #     df_ROAS_expired = main_update_addFan_ROAS(web_id, coupon_id, coupon_price_limit,
+    #                                               coupon_type, coupon_amount, coupon_total,
+    #                                               activity_start, activity_end,
+    #                                               type_total_price, type_cal_cost,
+    #                                               is_save=True)
+    #     df_ROAS_expired_all = pd.concat([df_ROAS_expired_all,df_ROAS])
 
 
     # ## force to update all existing coupon

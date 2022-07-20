@@ -9,6 +9,7 @@ from definitions import ROOT_DIR
 @timing
 def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, coupon_amount, coupon_price_limit,
                                    activity_start, activity_end, type_total_price, type_cal_cost):
+    activity_start_1 = datetime_to_str(to_datetime(activity_start) - datetime.timedelta(days=1))
     if type_total_price==0: ## use product_price * product_quantity
         if type_cal_cost==1: ## use coupon column to directly calculate cost (coupon column is value)
             query = f"""
@@ -20,7 +21,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         a.uuid AS uuid,	b.session_id AS session_b, b.total, b.coupon
                     FROM
                         (SELECT * FROM tracker.clean_event_acceptCoupon
-                        WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                        WHERE date_time >= '{activity_start_1}'
                         AND web_id = '{web_id}' AND coupon_id = '{coupon_id}') AS a
                     INNER JOIN (SELECT
                         uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total, AVG(ABS(coupon)) as coupon
@@ -44,7 +45,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             a.uuid AS uuid,	b.session_id AS session_b, b.total
                         FROM
                             (SELECT * FROM tracker.clean_event_acceptCoupon
-                            WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                            WHERE date_time >= '{activity_start_1}'
                             AND web_id = '{web_id}' AND coupon_id = '{coupon_id}') AS a
                         INNER JOIN (SELECT
                             uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total, coupon
@@ -92,7 +93,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             a.uuid AS uuid,	b.session_id AS session_b, b.total
                         FROM
                             (SELECT * FROM tracker.clean_event_acceptCoupon
-                            WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                            WHERE date_time >= '{activity_start_1}'
                             AND web_id = '{web_id}' AND coupon_id = '{coupon_id}') AS a
                         INNER JOIN 
                         (SELECT uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
@@ -103,7 +104,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         ON a.uuid = b.uuid
                         INNER JOIN 
                         (SELECT uuid, session_id, coupon_code FROM tracker.clean_event_enterCoupon WHERE 
-                        date_time BETWEEN '{activity_start}' AND '{activity_end}' AND web_id = '{web_id}') AS c 
+                        date_time >= '{activity_start_1}' AND web_id = '{web_id}') AS c 
                         on a.uuid=c.uuid AND a.coupon_code=c.coupon_code
                         GROUP BY uuid , session_b) AS temp
                     """
@@ -117,7 +118,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             a.uuid AS uuid,	b.session_id AS session_b, b.total
                         FROM
                             (SELECT * FROM tracker.clean_event_acceptCoupon
-                            WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                            WHERE date_time >= '{activity_start_1}'
                             AND web_id = '{web_id}' AND coupon_id = '{coupon_id}') AS a
                         INNER JOIN 
                         (SELECT uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
@@ -128,7 +129,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         ON a.uuid = b.uuid AND a.session_id = b.session_id
                         INNER JOIN 
                         (SELECT uuid, session_id, coupon_code FROM tracker.clean_event_enterCoupon WHERE 
-                        date_time BETWEEN '{activity_start}' AND '{activity_end}' AND web_id = '{web_id}') AS c 
+                        date_time >= '{activity_start_1}' AND web_id = '{web_id}') AS c 
                         on a.uuid=c.uuid AND a.session_id=c.session_id AND a.coupon_code=c.coupon_code
                         GROUP BY uuid , session_b) AS temp
                     """
@@ -142,7 +143,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             a.uuid AS uuid,	b.session_id AS session_b, b.total
                         FROM
                             (SELECT * FROM tracker.clean_event_acceptCoupon
-                            WHERE date_time BETWEEN '{activity_start}' AND '{activity_end}'
+                            WHERE date_time >= '{activity_start_1}'
                             AND web_id = '{web_id}' AND coupon_id = '{coupon_id}') AS a
                         INNER JOIN (SELECT
                             uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
@@ -216,7 +217,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             a.uuid AS uuid, b.session_id AS session_b, b.total_price
                         FROM
                             (select * from tracker.clean_event_acceptCoupon WHERE 
-                            date_time BETWEEN '{activity_start}' AND '{activity_end}' AND 
+                            date_time >= '{activity_start_1}' AND 
                             web_id='{web_id}' AND coupon_id='{coupon_id}') AS a
                         INNER JOIN 
                         (select * from tracker.clean_event_purchase where 
@@ -225,7 +226,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         ON a.uuid = b.uuid
                         INNER JOIN 
                         (SELECT uuid, session_id, coupon_code FROM tracker.clean_event_enterCoupon WHERE 
-                        date_time BETWEEN '{activity_start}' AND '{activity_end}' AND web_id = '{web_id}') AS c 
+                        date_time >= '{activity_start_1}' AND web_id = '{web_id}') AS c 
                         on a.uuid=c.uuid AND a.coupon_code=c.coupon_code
                         GROUP BY uuid , session_b) AS temp
                     """
@@ -239,7 +240,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             a.uuid AS uuid, b.session_id AS session_b, b.total_price
                         FROM
                             (select * from tracker.clean_event_acceptCoupon WHERE 
-                            date_time BETWEEN '{activity_start}' AND '{activity_end}' AND
+                            date_time >= '{activity_start_1}' AND
                             web_id='{web_id}' AND coupon_id='{coupon_id}') AS a
                         INNER JOIN 
                         (select * from tracker.clean_event_purchase where 
@@ -248,7 +249,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         ON a.uuid = b.uuid AND a.session_id = b.session_id
                         INNER JOIN 
                         (SELECT uuid, session_id, coupon_code FROM tracker.clean_event_enterCoupon WHERE 
-                        date_time BETWEEN '{activity_start}' AND '{activity_end}' AND web_id = '{web_id}') AS c 
+                        date_time >= '{activity_start_1}' AND web_id = '{web_id}') AS c 
                         on a.uuid=c.uuid AND a.session_id=c.session_id AND a.coupon_code=c.coupon_code
                         GROUP BY uuid , session_b) AS temp
                     """
