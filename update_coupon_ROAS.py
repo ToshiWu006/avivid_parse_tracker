@@ -404,7 +404,7 @@ def get_n_coupon_stat(df_ROAS, coupon_id, activity_start, activity_end, coupon_t
     df_ROAS['avg_n_coupon'] = [0] if days_remain==0 else [(coupon_total-coupon_used)/days_remain]
     return df_ROAS
 
-
+@logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
 def update_ROAS(df_ROAS, is_save=True, update_col=None):
     if not update_col:
         update_col = ['revenue', 'cost', 'coupon_sent', 'coupon_impression', 'coupon_accept', 'coupon_used', 'avg_n_coupon']
@@ -467,7 +467,7 @@ def fetch_ROAS_by_daily(coupon_id_list):
     FROM web_push.addfan_daily_ROAS WHERE coupon_id in ({','.join(coupon_id_list)}) group by coupon_id
     """
     data = DBhelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
-    columns = ['web_id', 'coupon_id', 'coupon_imp', 'coupon_accepted', 'coupon_used', 'cost', 'revenue']
+    columns = ['web_id', 'id', 'coupon_impression', 'coupon_accept', 'coupon_used', 'cost', 'revenue']
     df_ROAS = pd.DataFrame(data, columns=columns)
     return df_ROAS
 
