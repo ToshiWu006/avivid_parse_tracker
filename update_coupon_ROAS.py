@@ -19,6 +19,21 @@ def fetch_coupon_activity_all():
     df_coupon['coupon_price_limit'] = coupon_price_limit
     return df_coupon
 
+@timing
+def fetch_coupon_activity_by_id(coupon_id):
+    query = f"""
+    SELECT id, web_id, link_code, coupon_limit, coupon_type, coupon_amount, 
+    start_time, date_add(end_time,INTERVAL 1 DAY) as end_time, coupon_total
+    FROM addfan_activity WHERE web_id != 'rick' and id={coupon_id}
+    """
+    print(query)
+    data = DBhelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
+    columns = ['id', 'web_id', 'link_code', 'coupon_limit', 'coupon_type',
+               'coupon_amount', 'activity_start', 'activity_end', 'coupon_total']
+    coupon_price_limit = [int(d[3].split('limit-bill=')[1]) if d[3].find('limit-bill=')!=-1 else 0 for d in data]
+    df_coupon = pd.DataFrame(data, columns=columns).drop(columns=['coupon_limit'])
+    df_coupon['coupon_price_limit'] = coupon_price_limit
+    return df_coupon
 
 @timing
 def fetch_coupon_activity_running():

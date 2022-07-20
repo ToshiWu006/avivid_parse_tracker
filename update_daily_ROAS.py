@@ -2,7 +2,7 @@ import datetime
 import pandas as pd
 from basic import to_datetime, datetime_to_str, date_range, timing, curdate, logging_channels
 from db import DBhelper
-from update_coupon_ROAS import fetch_coupon_activity_running, fetch_calc_types, fetch_coupon_cost
+from update_coupon_ROAS import fetch_coupon_activity_running, fetch_coupon_activity_by_id, fetch_calc_types, fetch_coupon_cost
 from definitions import ROOT_DIR
 
 
@@ -349,6 +349,8 @@ def fetch_stat_by_id(web_id, coupon_id, coupon_type, coupon_cost, coupon_amount,
     return df.reset_index()
 
 
+
+
 def init_daily_ROAS():
     today = curdate(utc=8)
     type_total_price_dict, type_cal_cost_dict = fetch_calc_types()
@@ -395,7 +397,32 @@ def update_daily():
     return df_daily_all
 
 
+# execute every hour
+@logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
+def update_daily_by_coupon_id(coupon_id):
+    today = curdate(utc=8)
+    type_total_price_dict, type_cal_cost_dict = fetch_calc_types()
+    df_coupon = fetch_coupon_activity_by_id(coupon_id)
+    # df_coupon = df_coupon.query(f"web_id=='lab52'") # lovingfamily
+    df_daily_all = pd.DataFrame()
+    for i, row in df_coupon.iterrows():
+        coupon_id, web_id, link_code, coupon_type, coupon_amount, date_start, date_end, coupon_total, coupon_price_limit = row
+        type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
+        type_cal_cost = type_cal_cost_dict[web_id] if web_id in type_cal_cost_dict.keys() else 0
+        coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
+        df_daily = fetch_stat_by_id(web_id, coupon_id, coupon_type, coupon_cost, coupon_amount, coupon_price_limit,
+                                    date_start, date_end, type_total_price, type_cal_cost, today)
+        df_daily[['web_id', 'coupon_id']] = [[web_id, coupon_id]] * df_daily.shape[0]
+        df_daily_all = pd.concat([df_daily_all, df_daily])
+
+    update_cols = ['web_id', 'coupon_imp', 'coupon_accepted', 'coupon_used', 'revenue', 'cost']
+    query = DBhelper.generate_insertDup_SQLquery(df_daily_all, 'addfan_daily_ROAS', update_cols)
+    DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query, df_daily_all.to_dict('records'))
+    return df_daily_all
+
 if __name__ == "__main__":
+    ## init manaually
+    # df_daily_all = update_daily_by_coupon_id(245)
     ## init
     # df_daily_all = init_daily_ROAS()
 
