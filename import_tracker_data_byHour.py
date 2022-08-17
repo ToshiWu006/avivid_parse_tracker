@@ -165,7 +165,7 @@ def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCar
 
 @logging_channels(['clare_test'], report_args=False)
 @timing
-def update_statistics_table():
+def update_statistics_table(date_utc8):
     event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase', 'sendCoupon', 'acceptCoupon', 'discardCoupon']
     df_list = TrackingParser.get_multiple_df(event_type_list, date_utc8, date_utc8)
 
@@ -185,7 +185,8 @@ if __name__ == "__main__":
 
     ## save collection to s3 every hour
     AmazonS3('elephants3').upload_tracker_data(datetime_utc0=datetime_lastHour)
-
+    ## save six events to db including drop_duplicates (by web_id)
+    date_utc8 = datetime_to_str(datetime.datetime.utcnow()+datetime.timedelta(hours=8-1))
     ## get all df(9 events) this hour for all web_id
     event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
                        'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon', 'acceptAf']
@@ -193,6 +194,6 @@ if __name__ == "__main__":
     ## save 9 events to db
     save_clean_events(*df_hour_list, event_type_list=event_type_list)
     ## statistics
-    df_stat_all, df_coupon_stat_all = update_statistics_table()
+    df_stat_all, df_coupon_stat_all = update_statistics_table(date_utc8)
     ## delete folder at today_utc0-n
     delete_expired_folder(14)
