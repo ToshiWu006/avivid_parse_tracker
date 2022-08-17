@@ -374,20 +374,21 @@ def init_daily_ROAS():
 
 # execute every hour
 @logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
-def update_daily():
-    today = curdate(utc=8)
+def update_daily(date=None):
+    if date==None:
+        date = curdate(utc=8)
     type_total_price_dict, type_cal_cost_dict = fetch_calc_types()
     df_coupon = fetch_coupon_activity_running()
     # df_coupon = df_coupon.query(f"web_id=='lab52'") # lovingfamily
     df_daily_all = pd.DataFrame()
     for i, row in df_coupon.iterrows():
         coupon_id, web_id, link_code, coupon_type, coupon_amount, date_start, date_end, coupon_total, coupon_price_limit = row
-        date_start, date_end = datetime_to_str(today), datetime_to_str(today)
+        date_start, date_end = datetime_to_str(date), datetime_to_str(date)
         type_total_price = type_total_price_dict[web_id] if web_id in type_total_price_dict.keys() else 0
         type_cal_cost = type_cal_cost_dict[web_id] if web_id in type_cal_cost_dict.keys() else 0
         coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
         df_daily = fetch_stat_by_id(web_id, coupon_id, coupon_type, coupon_cost, coupon_amount, coupon_price_limit,
-                                    date_start, date_end, type_total_price, type_cal_cost, today)
+                                    date_start, date_end, type_total_price, type_cal_cost, date)
         df_daily[['web_id', 'coupon_id']] = [[web_id, coupon_id]] * df_daily.shape[0]
         df_daily_all = pd.concat([df_daily_all, df_daily])
 
@@ -399,8 +400,9 @@ def update_daily():
 
 # execute every hour
 @logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
-def update_daily_by_coupon_id(coupon_id):
-    today = curdate(utc=8)
+def update_daily_by_coupon_id(coupon_id, date=None, is_update=True):
+    if date==None:
+        date = curdate(utc=8)
     type_total_price_dict, type_cal_cost_dict = fetch_calc_types()
     df_coupon = fetch_coupon_activity_by_id(coupon_id)
     # df_coupon = df_coupon.query(f"web_id=='lab52'") # lovingfamily
@@ -411,20 +413,24 @@ def update_daily_by_coupon_id(coupon_id):
         type_cal_cost = type_cal_cost_dict[web_id] if web_id in type_cal_cost_dict.keys() else 0
         coupon_cost = fetch_coupon_cost(web_id, coupon_type, coupon_amount)
         df_daily = fetch_stat_by_id(web_id, coupon_id, coupon_type, coupon_cost, coupon_amount, coupon_price_limit,
-                                    date_start, date_end, type_total_price, type_cal_cost, today)
+                                    date_start, date_end, type_total_price, type_cal_cost, date)
         df_daily[['web_id', 'coupon_id']] = [[web_id, coupon_id]] * df_daily.shape[0]
         df_daily_all = pd.concat([df_daily_all, df_daily])
-
-    update_cols = ['web_id', 'coupon_imp', 'coupon_accepted', 'coupon_used', 'revenue', 'cost']
-    query = DBhelper.generate_insertDup_SQLquery(df_daily_all, 'addfan_daily_ROAS', update_cols)
-    DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query, df_daily_all.to_dict('records'))
+    if is_update:
+        update_cols = ['web_id', 'coupon_imp', 'coupon_accepted', 'coupon_used', 'revenue', 'cost']
+        query = DBhelper.generate_insertDup_SQLquery(df_daily_all, 'addfan_daily_ROAS', update_cols)
+        DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query, df_daily_all.to_dict('records'))
     return df_daily_all
 
 if __name__ == "__main__":
     ## init manaually
-    # df_daily_all = update_daily_by_coupon_id(245)
+    # df_daily_all = update_daily_by_coupon_id(295, is_update=False)
     ## init
     # df_daily_all = init_daily_ROAS()
 
     ## update every hour
     df_daily_all = update_daily()
+    ## update yesterday, to update data in 24:00
+    cur_hour = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).hour
+    if cur_hour <= 2:
+        df_daily_all_yesterdat = update_daily(date=curdate(utc=8-3))
