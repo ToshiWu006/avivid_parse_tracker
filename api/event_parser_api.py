@@ -66,7 +66,9 @@ def get_sql_events(date:str=date_now , hour:int=hour_last, web_id: str='nineyi11
                   "addCart":"clean_event_addCart", "removeCart":"clean_event_removeCart",
                   "purchase":"clean_event_purchase",
                   "acceptCoupon":"clean_event_acceptCoupon",
-                  "discardCoupon":"clean_event_discardCoupon"}
+                  "discardCoupon":"clean_event_discardCoupon",
+                  "enterCoupon":"clean_event_enterCoupon"
+                  }
     if event_type not in table_dict.keys():
         return {"message": "sql table not existed", "data": ""}
     query = f"""
@@ -93,7 +95,9 @@ def get_sql_latest_events(web_id: str='nineyi11', event_type: str='purchase', n_
                   "addCart":"clean_event_addCart", "removeCart":"clean_event_removeCart",
                   "purchase":"clean_event_purchase",
                   "acceptCoupon":"clean_event_acceptCoupon",
-                  "discardCoupon":"clean_event_discardCoupon"}
+                  "discardCoupon":"clean_event_discardCoupon",
+                  "enterCoupon":"clean_event_enterCoupon"
+                  }
     if event_type not in table_dict.keys():
         return {"message": "sql table not existed", "data": ""}
     query = f"""
