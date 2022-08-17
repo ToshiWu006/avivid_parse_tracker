@@ -185,9 +185,7 @@ if __name__ == "__main__":
 
     ## save collection to s3 every hour
     AmazonS3('elephants3').upload_tracker_data(datetime_utc0=datetime_lastHour)
-    ## save six events to db including drop_duplicates (by web_id)
-    web_id_all = fetch_enable_analysis_web_id()
-    date_utc8 = datetime_to_str(datetime.datetime.utcnow()+datetime.timedelta(hours=8-1))
+
     ## get all df(9 events) this hour for all web_id
     event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
                        'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon', 'acceptAf']
