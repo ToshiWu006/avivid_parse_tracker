@@ -218,7 +218,8 @@ class TrackingParser:
             object_dict.update(record_dict)
             result_dict_list += [object_dict]
         ## case to remove hito purchase events
-        result_dict_list = list(filter(lambda x: not x['product_id'].startswith('hitobp:product'), result_dict_list))
+        if result_dict_list:
+            result_dict_list = list(filter(lambda x: not str(x['product_id']).startswith('hitobp:product'), result_dict_list))
         return result_dict_list
 
     ## loaded event
