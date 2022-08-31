@@ -17,8 +17,17 @@ class AmazonS3 :
         s3 = aws_connector.resource("s3")
         self._bucket = s3.Bucket(bucket_name)
 
-    def dumpDateDataFilter(self, date, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d"):
-        data_list_filter = self.getDateDataFilter(date, dict_criteria)
+    def downloadTrackerData(self, date):
+        objects = self.getDateObjects(date, prefix_path="tracker")
+        n_obj = awsS3._CountObejects(objects)
+        for i, object in enumerate(objects, 1):
+            path_object = object.key
+            self.download_file(path_object)
+            print(f"finish loading number of objects, {i}/{n_obj}")
+
+    def dumpDateDataFilter(self, date, dict_criteria={'event_type': None,'web_id': None},
+                           pattern="%Y-%m-%d", prefix_path=None):
+        data_list_filter = self.getDateDataFilter(date, dict_criteria, prefix_path)
         root_folder = datetime_to_str(to_datetime(date, pattern), pattern="%Y/%m/%d")
         path_folder = os.path.join(ROOT_DIR, "s3data", root_folder)
         filename = "rawData.pickle"
@@ -36,9 +45,9 @@ class AmazonS3 :
         self.PickleDump(data_list_filter, path_folder, filename)
         return data_list_filter
 
-    def getDateDataFilter(self, date, dict_criteria={'event_type': None,'web_id': None}):
+    def getDateDataFilter(self, date, dict_criteria={'event_type': None,'web_id': None}, prefix_path=None):
         data_list_filter = []
-        objects = self.getDateObjects(date)
+        objects = self.getDateObjects(date, prefix_path)
         n_obj = AmazonS3._CountObejects(objects)
         for i,object in enumerate(objects):
             path_object = object.key
@@ -49,9 +58,9 @@ class AmazonS3 :
             data_list_filter += filterListofDictByDict(data_list, dict_criteria=dict_criteria)
         return data_list_filter
 
-    def getDateHourDataFilter(self, date, hour, dict_criteria={'event_type': None,'web_id': None}):
+    def getDateHourDataFilter(self, date, hour, dict_criteria={'event_type': None,'web_id': None}, prefix_path=None):
         data_list_filter = []
-        objects = self.getDateHourObjects(date, hour)
+        objects = self.getDateHourObjects(date, hour, prefix_path)
         n_obj = AmazonS3._CountObejects(objects)
 
         for i,object in enumerate(objects):
@@ -63,19 +72,22 @@ class AmazonS3 :
             # print(f"finish loading {path_object}")
             data_list_filter += filterListofDictByDict(data_list, dict_criteria=dict_criteria)
         return data_list_filter
-
-    def getDateObjects(self, date):
+    def getDateObjects(self, date, prefix_path=None):
         ## precision to hour
         date = datetime.datetime.strptime(date, '%Y-%m-%d')
         date = datetime_to_str(date, pattern="%Y/%m/%d")
         path_bucket = f"{date}"
+        if prefix_path:
+            path_bucket = f"{prefix_path}/{path_bucket}"
         return self._bucket.objects.filter(Prefix=path_bucket)
 
-    def getDateHourObjects(self, date, hour):
+    def getDateHourObjects(self, date, hour, prefix_path=None):
         ## precision to hour
         date_hour = datetime.datetime.strptime(f"{date} {hour}", '%Y-%m-%d %H')
         datetime_hour = datetime_to_str(date_hour, pattern="%Y/%m/%d/%H")
         path_bucket = f"{datetime_hour}"
+        if prefix_path:
+            path_bucket = f"{prefix_path}/{path_bucket}"
         return self._bucket.objects.filter(Prefix=path_bucket)
 
     def getLatestHourObjects(self):
@@ -166,7 +178,32 @@ class AmazonS3 :
         print(f"upload file from {file_name} to s3 {object_name}")
         self._upload_file(file_name, object_name)
 
+    def download_file(self, object_name, file_path=None):
+        """Download a file from an S3 bucket
+        :param file_name: File to upload
+        :param bucket: Bucket to upload to
+        :param object_name: S3 object name. If not specified then file_name is used
+        :param file_path: str, path to save in local
+        :return: True if file was downloaded, else False
+        """
 
+        if not file_path:
+            file_path = object_name.split(os.sep)
+            file_path[0] = "s3data"
+            file_path = os.path.join(ROOT_DIR, os.sep.join(file_path))
+        path_folder = os.sep.join(file_path.split(os.sep)[:-1])
+        Path(path_folder).mkdir(parents=True, exist_ok=True)
+        # path_write = os.path.join(path_foler, filename)
+        s3_client = boto3.client('s3', aws_access_key_id=self.settings["access_key"],
+                                  aws_secret_access_key=self.settings["access_secret"],
+                                  region_name=self.settings["region_name"])
+        try:
+            with open(file_path, 'wb') as f:
+                s3_client.download_fileobj(self.bucket_name, object_name, f)
+        except ClientError as e:
+            logging.error(e)
+            return False
+        return True
     def _upload_file(self, file_name, object_name=None):
         """Upload a file to an S3 bucket
 
@@ -193,6 +230,10 @@ class AmazonS3 :
 
 ## unit test
 if __name__ == "__main__":
+    ## download tracker data
+    awsS3 = AmazonS3('elephants3')
+    awsS3.downloadTrackerData("2022-08-09")
+
 
 
     ## test for uploading
@@ -201,7 +242,7 @@ if __name__ == "__main__":
     # AmazonS3('elephants3').upload_tracker_data(datetime_utc0='2022-01-27 01:00:00')
 
     # data_list = AmazonS3('elephants3').getDateDataFilter('2022-02-16',{'behavior_type': 'likrEventJob','web_id': 'coway'})
-    data_list = AmazonS3('elephants3').getDateHourDataFilter('2022-02-16', 12,{'behavior_type': 'likrEventJob','web_id': 'coway'})
+    # data_list = AmazonS3('elephants3').getDateHourDataFilter('2022-02-16', 12,{'behavior_type': 'likrEventJob','web_id': 'coway'})
 
 
     # with open('data_list.pickle', 'wb') as f:
