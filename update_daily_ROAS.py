@@ -29,7 +29,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         tracker.clean_event_purchase
                     WHERE
                         date_time BETWEEN '{activity_start}' AND '{activity_end}'
-                        AND web_id = '{web_id}' AND coupon!=0
+                        AND web_id = '{web_id}' AND coupon!=0 AND product_price>0
                     GROUP BY uuid , session_id, timestamp
                     HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b ON a.uuid = b.uuid
                         AND a.session_id = b.session_id
@@ -53,7 +53,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             tracker.clean_event_purchase
                         WHERE
                             date_time BETWEEN '{activity_start}' AND '{activity_end}'
-                            AND web_id = '{web_id}'
+                            AND web_id = '{web_id}' AND product_price>0
                         GROUP BY uuid , session_id, timestamp
                         HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b ON a.uuid = b.uuid
                             AND a.session_id = b.session_id AND a.coupon_code=b.coupon
@@ -77,7 +77,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                             tracker.clean_event_purchase
                         WHERE
                             date_time BETWEEN '{activity_start}' AND '{activity_end}'
-                            AND web_id = '{web_id}' AND avivid_coupon='1'
+                            AND web_id = '{web_id}' AND avivid_coupon='1' AND product_price>0
                         GROUP BY uuid , session_id, timestamp
                         HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b ON a.uuid = b.uuid
                             AND a.session_id = b.session_id
@@ -123,7 +123,7 @@ def fetch_coupon_used_revenue_cost(web_id, coupon_id, coupon_type, coupon_cost, 
                         INNER JOIN 
                         (SELECT uuid, session_id, timestamp, SUM(product_price * product_quantity) AS total
                         FROM tracker.clean_event_purchase WHERE
-                            date_time BETWEEN '{activity_start}' AND '{activity_end}' AND web_id = '{web_id}'
+                            date_time BETWEEN '{activity_start}' AND '{activity_end}' AND web_id = '{web_id}' AND product_price>0
                         GROUP BY uuid , session_id, timestamp
                         HAVING SUM(product_price * product_quantity) > {coupon_price_limit}) AS b 
                         ON a.uuid = b.uuid AND a.session_id = b.session_id
