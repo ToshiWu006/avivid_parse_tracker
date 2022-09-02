@@ -498,6 +498,11 @@ if __name__ == "__main__":
     df_ROAS_expired = fetch_ROAS_by_daily(coupon_id_exp_list)
     update_ROAS(df_ROAS_expired, is_save=True, update_col=list(df_ROAS_expired.columns))
 
+    # manually
+    # df_coupon_manually = fetch_coupon_activity_by_id(380)
+    # coupon_id_list = list(df_coupon_manually['id'])
+    # df_ROAS_manually = fetch_ROAS_by_daily(coupon_id_list)
+    # update_ROAS(df_ROAS_manually, is_save=True, update_col=list(df_ROAS_manually.columns))
 
     #
     # ## type_total_price: 0(use price*quantity), 1,others(use total_price),
