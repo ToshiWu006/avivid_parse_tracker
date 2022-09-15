@@ -214,12 +214,18 @@ class TrackingParser:
         object_dict_list = cls.parse_rename_object(data_dict, dict_settings_all, event_type)
         result_dict_list = []
         for object_dict in object_dict_list:
+            if 'product_id' not in object_dict or object_dict['product_id'].startswith('hitobp:product'):
+                # remove useless in hito
+                continue
+            object_dict['product_id'] = str(object_dict['product_id'])
+            if object_dict['product_id'].startswith('pufii:product'):
+                object_dict['product_id'] = object_dict['product_id'][14:]
+                if object_dict['product_id'][0] == 'p': object_dict['product_id'] = object_dict['product_id'].replace('p', 'P', 1)
+            elif object_dict['product_id'].startswith('wstyle:product'):
+                object_dict['product_id'] = object_dict['product_id'][15:]
             object_dict.update(universial_dict)
             object_dict.update(record_dict)
             result_dict_list += [object_dict]
-        ## case to remove hito purchase events
-        if result_dict_list:
-            result_dict_list = list(filter(lambda x: 'product_id' in x and not str(x['product_id']).startswith('hitobp:product'), result_dict_list))
         return result_dict_list
 
     ## loaded event
@@ -781,11 +787,11 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "hito" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    web_id = "wstyle" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-03-23"
-    date_utc8_end = "2022-03-23"
+    date_utc8_start = "2022-09-14"
+    date_utc8_end = "2022-09-14"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
@@ -798,7 +804,7 @@ if __name__ == "__main__":
     # query = DBhelper.generate_insertDup_SQLquery(df2, 'clean_event_acceptAf', ['ad_id'])
     # DBhelper('tracker').ExecuteUpdate(query, df2.to_dict('records'))
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'acceptCoupon')
-    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'hito', data_list, 'purchase')
+    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'wstyle', data_list, 'purchase')
     # df3 = TrackingParser.get_df_from_db('2022-05-19 00:00:00', '2022-05-19 02:00:00',
     #                                     web_id=None, event_type='purchase')
     #
