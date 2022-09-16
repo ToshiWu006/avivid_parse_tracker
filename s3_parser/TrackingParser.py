@@ -214,7 +214,7 @@ class TrackingParser:
         object_dict_list = cls.parse_rename_object(data_dict, dict_settings_all, event_type)
         result_dict_list = []
         for object_dict in object_dict_list:
-            if 'product_id' not in object_dict or object_dict['product_id'].startswith('hitobp:product'):
+            if 'product_id' not in object_dict or str(object_dict['product_id']).startswith('hitobp:product'):
                 # remove useless in hito
                 continue
             object_dict['product_id'] = str(object_dict['product_id'])
@@ -790,8 +790,8 @@ if __name__ == "__main__":
     web_id = "wstyle" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
     # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
     # # fuigo, deliverfresh
-    date_utc8_start = "2022-09-14"
-    date_utc8_end = "2022-09-14"
+    date_utc8_start = "2022-09-15"
+    date_utc8_end = "2022-09-15"
     tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
     data_list = tracking.data_list
     # # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
