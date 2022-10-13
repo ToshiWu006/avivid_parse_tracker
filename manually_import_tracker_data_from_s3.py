@@ -1,26 +1,5 @@
-from s3_parser import AmazonS3
-from basic import datetime_to_str, timing, logging_channels, datetime_range, filterListofDictByDict
-from definitions import ROOT_DIR
-import datetime, os, pickle
-import argparse
+import argparse, datetime
 from import_tracker_data_byHour import import_tracker_data_byDateHour
-
-
-def get_data_by_date(date_utc0):
-    file_list = get_a_day_file_list(date_utc0)
-    data_list = []
-    for file in file_list:
-        if os.path.isfile(file):
-            with open(file, 'rb') as f:
-                data_list += pickle.load(f)
-    return data_list
-
-
-def get_a_day_file_list(date_utc0):
-    datetime_list = datetime_range(date_utc0, hour_sep=1)[:-1]
-    file_list = [os.path.join(ROOT_DIR, "s3data", datetime_to_str(root_folder, pattern="%Y/%m/%d/%H"), "rawData.pickle") for root_folder in datetime_list]
-    return  file_list
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Import and download data from elephant s3')
