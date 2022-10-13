@@ -150,7 +150,9 @@ class AmazonS3 :
     def Read(self, key):
         """ Reading the S3 object from bucket """
         try :
-            return '['+self._bucket.Object(key=key).get()["Body"].read().decode().replace('}{','},{')+']'
+            data_decode =  self._bucket.Object(key=key).get()["Body"].read().decode().replace('}{','},{')
+            data_decode = data_decode.replace('}"landing"{', '},{')
+            return '['+data_decode+']'
         except :
             return '[]'
 
@@ -231,8 +233,64 @@ class AmazonS3 :
 ## unit test
 if __name__ == "__main__":
     ## download tracker data
-    awsS3 = AmazonS3('elephants3')
-    awsS3.downloadTrackerData("2022-08-09")
+    datetime_lastHour = datetime.datetime.utcnow()-datetime.timedelta(hours=0)
+    date = datetime_to_str(datetime_lastHour, pattern="%Y-%m-%d")
+    hour = datetime_to_str(datetime_lastHour, pattern="%H")
+    s3 = AmazonS3('elephants3')
+    # data_list_filter = s3.dumpDateHourDataFilter(date, hour, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
+
+    data_list_filter = []
+    objects = s3.getDateHourObjects(date, hour)
+    n_obj = AmazonS3._CountObejects(objects)
+
+    for i, object in enumerate(objects):
+        # if i != 11:
+        #     continue
+        path_object = object.key
+        # print(path_object)  ##path of each Object
+        # x = s3._bucket.Object(key=path_object).get()["Body"].read().decode().replace('}{', '},{')
+        # x = s3._bucket.Object(key=path_object).get()["Body"].read().decode().replace('}"landing"{', '},{')
+
+        # x = s3._bucket.Object(key=path_object).get()["Body"].read().decode()
+
+        # print(x[2529524-100:2529524+1000])
+        # print(x[0:0+100])
+        #
+        # with open('test.txt', 'w') as file:
+        #     file.write(x)
+        data_list = json.loads(s3.Read(path_object))
+        print(f"finish loading number of objects, {i}/{n_obj}")
+        #
+        # try:
+        #     print(s3._bucket.Object(key=path_object).get()["Body"].read().decode().replace('}{', '},{'))
+        #     data_list = json.loads(s3.Read(path_object))
+        #
+        # except:
+        #
+        #     # '[' + s3._bucket.Object(key=path_object).get()["Body"].read().decode().replace('}{', '},{') + ']'
+        #     print(s3._bucket.Object(key=path_object).get()["Body"].read().decode().replace('}{', '},{'))
+
+        # if i % 10 == 0:
+        #     print(f"finish loading number of objects, {i}/{n_obj}")
+        # print(f"finish loading {path_object}")
+        # data_list_filter += filterListofDictByDict(data_list, dict_criteria={'event_type': None,'web_id': None})
+
+
+    # objects = awsS3.getDateObjects('2022-08-01')
+    # data = []
+    # for i,obj in enumerate(objects):
+    #     if i == 2: break
+    #     print(obj)
+    #     raw = json.loads(awsS3.Read(obj.key))
+    #     data_filter = list(filter(lambda x: x['web_id'] == 'ctnews', raw))
+    #     data.extend(data_filter)
+    #
+    #     # awsS3.download_file(obj.key, f's3data/{i}')
+    #
+    # data_filter = list(filter(lambda x: 'web_id' in x.keys(), data))
+    # data_filter = list(filter(lambda x: x['web_id'] =='ctnews', data_filter))
+
+    # awsS3.downloadTrackerData("2022-08-09")
 
 
 
