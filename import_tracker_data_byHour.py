@@ -17,6 +17,13 @@ def collectLastHour():
     data_list_filter = s3.dumpDateHourDataFilter(date, hour, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
     return data_list_filter, datetime_lastHour
 
+@timing
+def collectDateHour(date, hour):
+    date_time = datetime.datetime.strptime(f"{date} {hour}", "%Y-%m-%d %H")
+    s3 = AmazonS3()
+    data_list_filter = s3.dumpDateHourDataFilter(date, hour, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
+    return data_list_filter, date_time
+
 # @logging_channels(['clare_test'])
 # @timing
 # def collectYesterday():
@@ -175,6 +182,24 @@ def update_statistics_table(date_utc8):
     save_tracker_statistics(df_coupon_stat_all)
     return df_stat_all, df_coupon_stat_all
 
+def import_tracker_data_byDateHour(date, hour):
+    ## load data from s3
+    data_list_filter, date_hour = collectDateHour(date, hour)
+    # ## test
+    # data_list_filter_event = filterListofDictByDict(data_list_filter, dict_criteria={"event_type":'purchase'})
+
+    ## save collection to s3 every hour
+    AmazonS3('elephants3').upload_tracker_data(datetime_utc0=date_hour)
+    ## save six events to db including drop_duplicates (by web_id)
+    date_utc8 = datetime_to_str(date_hour+datetime.timedelta(hours=8))
+    ## get all df(11 events) this hour for all web_id
+    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
+                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon', 'acceptAf']
+    df_hour_list = TrackingParser.get_multiple_df(data_list=data_list_filter, event_type_list=event_type_list)
+    ## save 9 events to db
+    save_clean_events(*df_hour_list, event_type_list=event_type_list)
+    ## statistics
+    df_stat_all, df_coupon_stat_all = update_statistics_table(date_utc8)
 
 
 if __name__ == "__main__":
