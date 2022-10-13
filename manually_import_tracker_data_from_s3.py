@@ -7,7 +7,6 @@ if __name__ == "__main__":
     parser.add_argument("-dt2", "--date2_UTC0", help="ending datetime with formate 2022-01-01 10:00:00")
     args = parser.parse_args()
     datetime_start, datetime_end = args.date1_UTC0, args.date2_UTC0
-    datetime_start, datetime_end = '2022-10-12 04:00:00', '2022-10-13 04:00:00'
     datetime_start = datetime.datetime.strptime(datetime_start, "%Y-%m-%d %H:%M:%S")
     datetime_end = datetime.datetime.strptime(datetime_end, "%Y-%m-%d %H:%M:%S")
     print(f"import events from s3, datetime from '{datetime_start}' to '{datetime_end}'")
