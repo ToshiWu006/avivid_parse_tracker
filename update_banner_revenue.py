@@ -1,0 +1,87 @@
+from s3_parser import TrackingParser
+from db import DBhelper
+from basic import logging_channels
+import collections, datetime, argparse
+import pandas as pd
+from sys import exit
+from definitions import ROOT_DIR
+
+@logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
+def prepare_segment_revenues(date, hour, is_save=False) -> list:
+    if type(hour) == str:
+        hour = int(hour)
+    data_list = TrackingParser.get_file_byHour(date, hour, utc=8)
+    df_purchase = TrackingParser.get_df(data_list=data_list, event_type='purchase')
+    df_click = TrackingParser.get_df_click(web_id=None, data_list=data_list, event_type=None)
+
+    # build click set, (web_id, uuid, session)
+    click_dict_set = collections.defaultdict(set)
+    for i,row in df_click.iterrows():
+        recommend_type = row['recommend_type']
+        web_id, uuid, session_id = row['web_id'], row['uuid'], row['session_id']
+        click_dict_set[recommend_type].add((web_id, uuid, session_id))
+
+    # clean purchased list
+    purchase_dict_ts = collections.defaultdict(int)
+    for i,row in df_purchase.iterrows():
+        total_price = max(float(row['total_price']), 0)
+        product_price = 0 if row['product_price'] == -1 else float(row['product_price'])
+        product_quantity = max(float(row['product_quantity']), 0)
+        web_id, uuid, session_id, ts = row['web_id'], row['uuid'], row['session_id'], row['timestamp']
+        if total_price:
+            purchase_dict_ts[(web_id, uuid, session_id, ts)] = total_price
+        else: # bad total price, sum up using
+            purchase_dict_ts[(web_id, uuid, session_id, ts)] += product_price * product_quantity
+
+    # build revenue map, key:value = (web_id, uuid, session_id):revenue
+    purchase_dict = collections.defaultdict(int)
+    purchase_set = set()
+    for (web_id, uuid, session_id, ts), revenue in purchase_dict_ts.items():
+        purchase_dict[(web_id, uuid, session_id)] += revenue
+        purchase_set.add((web_id, uuid, session_id))
+
+    # segment revenue
+    revenue_seg = []
+    revenue_seg_dict = collections.defaultdict(int)
+    for i in range(11): ## 11 types of banner
+        banner = purchase_set.intersection(click_dict_set[i])
+        res = []
+        for key in banner:
+            rev = purchase_dict[key]
+            res.append((key[0], i, rev))
+            revenue_seg_dict[(key[0], i)] += rev
+        revenue_seg.extend(res)
+        # remove current set in purchase_set
+        purchase_set.difference_update(banner)
+
+    # build saved data
+    results = []
+    for web_id, recommend_type, revenue in revenue_seg:
+        results.append({'web_id': web_id, 'recommend_type':recommend_type, 'revenue':revenue,
+                        'date':date, 'hour':hour})
+    df = pd.DataFrame.from_dict(results)
+    if is_save and results:
+        query = DBhelper.generate_insertDup_SQLquery(df, 'segment_revenues', df.columns)
+        DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query, results)
+    return df, df_purchase
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='update segment revenues of each banner from local storage')
+    parser.add_argument("-date", "--date", help="date with format '2022-01-01' using utc 8")
+    parser.add_argument("-hour", "--hour", help="hour on the date using utc8")
+    parser.add_argument("-is", "--is_save", help="update to table or not, format: 'T' or 'F'(None, others)")
+
+    args = parser.parse_args()
+    date, hour, is_save = args.date, args.hour, args.is_save
+    is_save = True if is_save == 'T' else False
+    if not date and not hour:
+        # auto mode
+        date_time = datetime.datetime.utcnow() + datetime.timedelta(hours=8-1)
+        date, hour = datetime.datetime.strftime(date_time, "%Y-%m-%d"), datetime.datetime.strftime(date_time, "%H")
+        print(f"no date and hour input, use last one hour: {date} {hour}")
+    elif not date or not hour:
+        print("Please input both date and hour")
+        exit()
+    df, df_purchase = prepare_segment_revenues(date, hour, is_save=is_save)
+    # df, df_purchase = prepare_segment_revenues(date, 10, is_save=is_save)
