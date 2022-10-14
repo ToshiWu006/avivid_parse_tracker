@@ -1,7 +1,7 @@
 from basic import datetime_to_str, timing, logging_channels, datetime_range, filterListofDictByDict, to_datetime
 from definitions import ROOT_DIR
 from db import DBhelper
-import datetime, os, pickle, json
+import datetime, os, pickle, json, collections
 import pandas as pd
 import re
 import numpy as np
@@ -181,6 +181,53 @@ class TrackingParser:
         data = DBhelper('tracker').ExecuteSelect(query)
         df = pd.DataFrame(data, columns=columns)
         return df
+
+    @classmethod
+    def get_df_click(cls, date_utc8_start='2022-01-01', date_utc8_end='2022-01-01',
+                    web_id=None, data_list=None, event_type=None):
+        if data_list==None:
+            data_list = cls.get_data_by_daterange(date_utc8_start, date_utc8_end)
+        data_list = filterListofDictByDict(data_list, dict_criteria={"click_info":None})
+        if web_id:
+            data_list = filterListofDictByDict(data_list, dict_criteria={"web_id":web_id})
+        if event_type:
+            data_list = filterListofDictByDict(data_list, dict_criteria={"event_type": event_type})
+        res = []
+        for data_dict in data_list:
+            res.extend(cls.fully_parse_clickInfo(data_dict))
+        df = pd.DataFrame(res)
+        df['date_time'] = [datetime.datetime.utcfromtimestamp(ts / 1000) + datetime.timedelta(hours=8) for ts in
+                           df['timestamp']]
+        return df
+
+    @staticmethod
+    def fully_parse_clickInfo(data_dict:dict) -> list:
+        type_dict = {"keyword_side_hot": 0, "keyword_side_footprint": 1, "keyword_search": 2, "keyword_word_hot": 3,
+                     "keyword_word_other": 4, "sliding_click": 5, "guess_click": 7, "footprint_click": 8,
+                     "otherlike_click": 9, "onpage": 10}
+        # general keys
+        keys_general = ["web_id", "uuid", "ga_id", "fb_id", "ip", "timestamp"]  # all sql default is string
+        # in click_info
+        keys_clickInfo = {"s_id": "_", "s_idl": "_", "dv": -1, "ul": "_", "un": "_", "type": 0,
+                          "eventLabel": "_"}  # key:default
+        keys_rename = ["session_id", "session_id_last", "device", "url_last", "url_now", "recommend_type", "label"]
+
+        event_type = data_dict.get("event_type")  # default is None
+        if not event_type or not data_dict or event_type not in type_dict:
+            return []
+        result_dict = {}
+        # update key and value
+        result_dict.update({k: data_dict.get(k, "_") for k in keys_general})
+        clickInfo = data_dict.get("click_info", keys_clickInfo) # default
+        # update key and value
+        for (k, d), rk in zip(keys_clickInfo.items(), keys_rename):
+            if k == "type":
+                result_dict[rk] = type_dict.get(event_type, -1) + (clickInfo.get(k, d))
+            else:
+                result_dict[rk] = clickInfo.get(k, d)
+        return [result_dict] # list
+
+
 
     @staticmethod
     def clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16,
@@ -787,24 +834,62 @@ class TrackingParser:
 
 
 if __name__ == "__main__":
-    web_id = "wstyle" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
-    # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
-    # # fuigo, deliverfresh
-    date_utc8_start = "2022-09-15"
-    date_utc8_end = "2022-09-15"
-    tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
-    data_list = tracking.data_list
-    # # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
-    # # # # event_type = "acceptCoupon"
-    data_list_filter = filterListofDictByDict(data_list,
-                                              dict_criteria={"web_id": web_id,
-                                                            "event_type":'purchase'}) # sendCoupon, acceptCoupon, discardCoupon
+    # web_id = "wstyle" # chingtse, kava, draimior, magiplanet, i3fresh, wstyle, blueseeds, menustudy
+    # # # lovingfamily, millerpopcorn, blueseeds, hidesan, washcan, hito, fmshoes, lzl, ego, up2you
+    # # # fuigo, deliverfresh
+    # date_utc8_start = "2022-10-13"
+    # date_utc8_end = "2022-10-13"
+    # tracking = TrackingParser(web_id, date_utc8_start, date_utc8_end)
+    # data_list = tracking.data_list
+    # # # order,amount,ship,order_coupon.json.total,bitem.json.itemid,bitem.json.empty,bitem.json.price,bitem.json.count,bitem.json.empty,bitem.json.empty,bitem.json.empty,bitem.json.empty
+    # # # # # event_type = "acceptCoupon"
+    # data_list_filter = filterListofDictByDict(data_list,
+    #                                           dict_criteria={"click_info":None}) # sendCoupon, acceptCoupon, discardCoupon
+    # x = filterListofDictByDict(data_list_filter, dict_criteria={"ip": "_", "uuid":"80aab48c-f089-4288-9117-b1eacd7db523"})
+    # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": "onpage"})  # sendCoupon, acceptCoupon, discardCoupon
+    #
+
+
+    df = TrackingParser.get_df_click(date_utc8_start='2022-10-13', date_utc8_end='2022-10-13',
+                                    web_id=None, data_list=None, event_type=None)
+
+    query = DBhelper.generate_insertDup_SQLquery(df, 'clean_event_clickInfo', df.columns)
+    DBhelper('tracker').ExecuteUpdate(query, df.to_dict('records'))
+    # res = []
+    # for data_dict in data_list_filter:
+    #     type_dict = {"keyword_side_hot": 0, "keyword_side_footprint": 1, "keyword_search": 2, "keyword_word_hot": 3,
+    #                  "keyword_word_other": 4, "sliding_click": 5, "guess_click": 7, "footprint_click": 8,
+    #                  "otherlike_click": 9, "onpage": 10
+    #                  }
+    #     event_type = data_dict.get("event_type")  # default is None
+    #     if not event_type or not data_dict or event_type not in type_dict:
+    #         continue
+    #         # return []
+    #     result_dict = {}
+    #     # general keys
+    #     keys_general = ["web_id", "uuid", "ga_id", "fb_id", "ip", "timestamp"]  # all sql default is string
+    #     # update key and value
+    #     result_dict.update({k: data_dict.get(k, "_") for k in keys_general})
+    #     # in click_info
+    #     keys_clickInfo = {"s_id": "_", "s_idl": "_", "dv": -1, "ul": "_", "un": "_", "type": 0,
+    #                       "eventLabel": "_"}  # key:default
+    #     keys_rename = ["session_id", "session_id_last", "device", "url_last", "url_now", "recommend_type", "label"]
+    #     clickInfo = data_dict.get("click_info",
+    #                               {"s_id": "_", "s_idl": "_", "dv": -1, "ul": "_", "un": "_", "type": 0, "eventLabel": "_"})
+    #     # update key and value
+    #     for (k, d), rk in zip(keys_clickInfo.items(), keys_rename):
+    #         if k == "type":
+    #             result_dict[rk] = type_dict.get(event_type, -1) + (clickInfo.get(k, d))
+    #         else:
+    #             result_dict[rk] = clickInfo.get(k, d)
+    #     res.append(result_dict)
+    # df = pd.DataFrame(res)
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": "acceptCoupon"})
     # df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'bamboo', data_list_filter, 'acceptAf')
     # query = DBhelper.generate_insertDup_SQLquery(df2, 'clean_event_acceptAf', ['ad_id'])
     # DBhelper('tracker').ExecuteUpdate(query, df2.to_dict('records'))
     # df_sendCoupon = tracking.get_df(web_id, data_list_filter, 'acceptCoupon')
-    df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'wstyle', data_list, 'purchase')
+    # df2 = TrackingParser.get_df(date_utc8_start, date_utc8_end, 'wstyle', data_list, 'purchase')
     # df3 = TrackingParser.get_df_from_db('2022-05-19 00:00:00', '2022-05-19 02:00:00',
     #                                     web_id=None, event_type='purchase')
     #
