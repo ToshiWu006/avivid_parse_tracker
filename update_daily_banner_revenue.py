@@ -9,6 +9,7 @@ from definitions import ROOT_DIR
 
 def fetch_users(date)->dict:
     query = f"""SELECT web_id, n_uuid_load FROM tracker.clean_event_stat where date='{date}'"""
+    print(query)
     data = DBhelper("tracker").ExecuteSelect(query)
     res = defaultdict(int)
     for web_id, users in data:
@@ -18,7 +19,9 @@ def fetch_users(date)->dict:
 
 @logging_channels(['clare_test'], save_local=True, ROOT_DIR=ROOT_DIR)
 def prepare_daily_segment_revenues(date, is_save=False) -> list:
-    df_purchase = TrackingParser.get_df(date_utc8_start=date, date_utc8_end=date, event_type='purchase')
+    date_utc8_start = datetime.datetime.strptime(date, '%Y-%m-%d')
+    date_utc8_end = date_utc8_start + datetime.timedelta(hours=24)
+    df_purchase = TrackingParser.get_df_from_db(date_utc8_start, date_utc8_end, event_type='purchase')
     users_dict = fetch_users(date)
     web_id_all = list(set(users_dict.keys()))
 
