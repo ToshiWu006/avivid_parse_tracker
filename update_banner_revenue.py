@@ -2,6 +2,7 @@ from s3_parser import TrackingParser
 from db import DBhelper
 from basic import logging_channels
 import collections, datetime, argparse
+from collections import defaultdict
 import pandas as pd
 from sys import exit
 from definitions import ROOT_DIR
@@ -13,7 +14,8 @@ def prepare_segment_revenues(date, hour, is_save=False) -> list:
     data_list = TrackingParser.get_file_byHour(date, hour, utc=8)
     df_purchase = TrackingParser.get_df(data_list=data_list, event_type='purchase')
     df_click = TrackingParser.get_df_click(web_id=None, data_list=data_list, event_type=None)
-
+    del data_list
+    web_id_all = list(set(df_click['web_id']))
     # build click set, (web_id, uuid, session)
     click_dict_set = collections.defaultdict(set)
     for i,row in df_click.iterrows():
@@ -40,29 +42,35 @@ def prepare_segment_revenues(date, hour, is_save=False) -> list:
         purchase_dict[(web_id, uuid, session_id)] += revenue
         purchase_set.add((web_id, uuid, session_id))
 
-    # segment revenue
+    # segment revenue, transaction
     revenue_seg = []
-    revenue_seg_dict = collections.defaultdict(int)
+    revenue_seg_dict, transaction_seg_dict = defaultdict(int), defaultdict(int)
     for i in range(11): ## 11 types of banner
-        banner = purchase_set.intersection(click_dict_set[i])
+        banner = purchase_set.intersection(click_dict_set[i]) # (web_id, uuid, session_id)
         res = []
-        for key in banner:
+        for key in banner: # (web_id, uuid, session_id)
             rev = purchase_dict[key]
-            res.append((key[0], i, rev))
+            res.append((key[0], i, rev)) # (web_id, recommend_type, revenue)
             revenue_seg_dict[(key[0], i)] += rev
+            transaction_seg_dict[(key[0], i)] += 1
         revenue_seg.extend(res)
         # remove current set in purchase_set
         purchase_set.difference_update(banner)
 
     # build saved data
-    results = []
-    for web_id, recommend_type, revenue in revenue_seg:
-        results.append({'web_id': web_id, 'recommend_type':recommend_type, 'revenue':revenue,
-                        'date':date, 'hour':hour})
+    results = [
+    {'web_id':web_id, 'recommend_type':i, 'revenue':revenue_seg_dict[(web_id, i)],
+    'clicks':df_click.query(f"web_id=='{web_id}' and recommend_type=={i}").shape[0],
+    'sessions':len(set(df_click.query(f"web_id=='{web_id}' and recommend_type=={i}")[['uuid', 'session_id']].itertuples(index=False))),
+    'transaction':transaction_seg_dict[(web_id, i)],
+    'date':date, 'hour':hour} for web_id in web_id_all for i in range(11)
+    ]
+    results = list(filter(lambda x: x['clicks'] != 0, results))
     df = pd.DataFrame.from_dict(results)
+
     if is_save and results:
         query = DBhelper.generate_insertDup_SQLquery(df, 'segment_revenues', df.columns)
-        DBhelper("rhea1-db0", is_ssh=True).ExecuteUpdate(query, results)
+        DBhelper("roas_report").ExecuteUpdate(query, results)
     return df, df_purchase
 
 if __name__ == "__main__":
