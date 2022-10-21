@@ -28,10 +28,12 @@ def prepare_daily_segment_revenues(date, is_save=False) -> list:
     # clean purchased list
     purchase_dict_ts = collections.defaultdict(int)
     for i, row in df_purchase.iterrows():
-        total_price = max(float(row['total_price']), 0)
-        product_price = 0 if row['product_price'] == -1 else float(row['product_price'])
-        product_quantity = max(float(row['product_quantity']), 0)
-        web_id, uuid, session_id, ts = row['web_id'], row['uuid'], row['session_id'], row['timestamp']
+        total_price = max(float(row.get('total_price', 0)), 0)
+        product_price = 0 if row.get('product_price', 0) == -1 else float(row.get('product_price', 0))
+        product_quantity = max(float(row.get('product_quantity', 0)), 0)
+        # web_id, uuid, session_id, ts = row['web_id'], row['uuid'], row['session_id'], row['timestamp']
+        web_id, uuid, session_id, ts = row.get('web_id', '_'), row.get('uuid', '_'), row.get('session_id', 0), row.get('timestamp', 0)
+
         if total_price:
             purchase_dict_ts[(web_id, uuid, session_id, ts)] = total_price
         else:  # bad total price, sum up using
