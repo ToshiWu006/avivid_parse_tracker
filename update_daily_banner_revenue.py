@@ -7,13 +7,13 @@ import pandas as pd
 from definitions import ROOT_DIR
 
 
-def fetch_users(date)->dict:
-    query = f"""SELECT web_id, n_uuid_load FROM tracker.clean_event_stat where date='{date}'"""
+def fetch_users_sessions(date)->dict:
+    query = f"""SELECT web_id, n_uuid_load, n_sessions_load FROM tracker.clean_event_stat where date='{date}'"""
     print(query)
     data = DBhelper("tracker").ExecuteSelect(query)
-    res = defaultdict(int)
-    for web_id, users in data:
-        res[web_id] = users
+    res = {}
+    for web_id, users, sessions in data:
+        res[web_id] = [users, sessions]
     return res
 
 
@@ -22,8 +22,8 @@ def prepare_daily_segment_revenues(date, is_save=False) -> list:
     date_utc8_start = datetime.datetime.strptime(date, '%Y-%m-%d')
     date_utc8_end = date_utc8_start + datetime.timedelta(hours=24)
     df_purchase = TrackingParser.get_df_from_db(date_utc8_start, date_utc8_end, event_type='purchase')
-    users_dict = fetch_users(date)
-    web_id_all = list(set(users_dict.keys()))
+    users_sessions_dict = fetch_users_sessions(date)
+    web_id_all = list(set(users_sessions_dict.keys()))
 
     # clean purchased list
     purchase_dict_ts = collections.defaultdict(int)
@@ -44,10 +44,10 @@ def prepare_daily_segment_revenues(date, is_save=False) -> list:
     for (web_id, uuid, session_id, ts), revenue in purchase_dict_ts.items():
         total_revenue_dict[web_id] += revenue
         transactions_dict[web_id] += 1
-
     results = [
         {'web_id': web_id, 'total_revenue': total_revenue_dict[web_id],
-         'users': users_dict[web_id], 'transactions': transactions_dict[web_id], 'date': date}
+         'users': users_sessions_dict[web_id][0], 'sessions': users_sessions_dict[web_id][1],
+         'transactions': transactions_dict[web_id], 'date': date}
         for web_id in web_id_all]
     df = pd.DataFrame.from_dict(results)
 
