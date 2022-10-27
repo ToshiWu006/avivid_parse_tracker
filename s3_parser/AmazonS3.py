@@ -19,7 +19,7 @@ class AmazonS3 :
 
     def downloadTrackerData(self, date):
         objects = self.getDateObjects(date, prefix_path="tracker")
-        n_obj = awsS3._CountObejects(objects)
+        n_obj = self._CountObejects(objects)
         for i, object in enumerate(objects, 1):
             path_object = object.key
             self.download_file(path_object)
