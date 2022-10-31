@@ -424,7 +424,7 @@ def update_daily_by_coupon_id(coupon_id, date=None, is_update=True):
 
 if __name__ == "__main__":
     ## init manaually
-    # df_daily_all = update_daily_by_coupon_id(295, is_update=False)
+    # df_daily_all = update_daily_by_coupon_id(380, is_update=True)
     ## init
     # df_daily_all = init_daily_ROAS()
 
