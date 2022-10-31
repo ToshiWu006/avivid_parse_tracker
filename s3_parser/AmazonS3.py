@@ -2,6 +2,7 @@ import boto3, json, os, logging
 from botocore.exceptions import ClientError
 import datetime
 import pickle
+import re
 from pathlib import Path
 from definitions import ROOT_DIR
 from basic import datetime_to_str, logging_channels, filterListofDictByDict, timing, to_datetime
@@ -151,7 +152,7 @@ class AmazonS3 :
         """ Reading the S3 object from bucket """
         try :
             data_decode =  self._bucket.Object(key=key).get()["Body"].read().decode().replace('}{','},{')
-            data_decode = data_decode.replace('}"landing"{', '},{')
+            data_decode = re.sub(r'}("landing")+{', '},{', data_decode)
             return '['+data_decode+']'
         except :
             return '[]'
