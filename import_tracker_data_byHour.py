@@ -17,6 +17,13 @@ def collectLastHour():
     data_list_filter = s3.dumpDateHourDataFilter(date, hour, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
     return data_list_filter, datetime_lastHour
 
+@timing
+def collectDateHour(date, hour):
+    date_time = datetime.datetime.strptime(f"{date} {hour}", "%Y-%m-%d %H")
+    s3 = AmazonS3()
+    data_list_filter = s3.dumpDateHourDataFilter(date, hour, dict_criteria={'event_type': None,'web_id': None}, pattern="%Y-%m-%d")
+    return data_list_filter, date_time
+
 # @logging_channels(['clare_test'])
 # @timing
 # def collectYesterday():
@@ -143,18 +150,24 @@ def get_tracker_statistics_all(date, df_loaded, df_leaved, df_timeout, df_addCar
     for web_id in web_id_list:
         data_dict = {'web_id': web_id, 'date': date}
         df_list = [df_loaded, df_leaved, df_timeout, df_addCart, df_removeCart, df_purchased]
-        columns = ['n_events_load', 'n_uuid_load', 'n_events_leave', 'n_uuid_leave', 'n_events_timeout',
-                   'n_uuid_timeout',
-                   'n_events_addCart', 'n_uuid_addCart', 'n_events_removeCart', 'n_uuid_removeCart',
-                   'n_events_purchase', 'n_uuid_purchase']
+        columns = ['n_events_load', 'n_uuid_load', 'n_sessions_load',
+                   'n_events_leave', 'n_uuid_leave', 'n_sessions_leave',
+                   'n_events_timeout', 'n_uuid_timeout', 'n_sessions_timeout',
+                   'n_events_addCart', 'n_uuid_addCart', 'n_sessions_addCart',
+                   'n_events_removeCart', 'n_uuid_removeCart', 'n_sessions_removeCart',
+                   'n_events_purchase', 'n_uuid_purchase', 'n_sessions_purchase'] # please order it!!
         for i, df in enumerate(df_list):
             df = get_web_id_df(df, web_id)
             if df.shape[0] == 0:
-                n_events, n_uuid = 0, 0
+                n_events, n_uuid, n_sessions = 0, 0, 0
             else:
+                df_sessions = df[['uuid', 'session_id']]
+                sessions_list = df_sessions.to_dict("list")
+                sessions_set = list(zip(*[sessions_list['uuid'], sessions_list['session_id']]))
                 n_events = df.shape[0]
                 n_uuid = len(set(df['uuid']))
-            data_dict.update({columns[2 * i]: [n_events], columns[2 * i + 1]: [n_uuid]})
+                n_sessions = len(set(sessions_set))
+            data_dict.update({columns[3 * i]: [n_events], columns[3 * i + 1]: [n_uuid], columns[3 * i + 2]: [n_sessions]})
         df_stat = pd.DataFrame.from_dict(data_dict)
         df_stat['n_uuid_load_purchased_before'] = 0 if df_loaded.shape[0] == 0 else len(
             set(df_loaded.query(f"web_id=='{web_id}'").query("is_purchased_before==1")['uuid']))
@@ -175,6 +188,24 @@ def update_statistics_table(date_utc8):
     save_tracker_statistics(df_coupon_stat_all)
     return df_stat_all, df_coupon_stat_all
 
+def import_tracker_data_byDateHour(date, hour):
+    ## load data from s3
+    data_list_filter, date_hour = collectDateHour(date, hour)
+    # ## test
+    # data_list_filter_event = filterListofDictByDict(data_list_filter, dict_criteria={"event_type":'purchase'})
+
+    ## save collection to s3 every hour
+    AmazonS3('elephants3').upload_tracker_data(datetime_utc0=date_hour)
+    ## save six events to db including drop_duplicates (by web_id)
+    date_utc8 = datetime_to_str(date_hour+datetime.timedelta(hours=8))
+    ## get all df(11 events) this hour for all web_id
+    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
+                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon', 'acceptAf']
+    df_hour_list = TrackingParser.get_multiple_df(data_list=data_list_filter, event_type_list=event_type_list)
+    ## save 9 events to db
+    save_clean_events(*df_hour_list, event_type_list=event_type_list)
+    ## statistics
+    df_stat_all, df_coupon_stat_all = update_statistics_table(date_utc8)
 
 
 if __name__ == "__main__":
