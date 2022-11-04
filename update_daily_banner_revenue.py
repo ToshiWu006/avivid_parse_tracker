@@ -54,6 +54,7 @@ def prepare_daily_segment_revenues(date, is_save=False) -> list:
     if is_save and results:
         query = DBhelper.generate_insertDup_SQLquery(df, 'website_total_segment_revenue', df.columns)
         DBhelper("roas_report").ExecuteUpdate(query, results)
+        DBhelper("sun").ExecuteUpdate(query, results)
     return df, df_purchase
 
 if __name__ == "__main__":
