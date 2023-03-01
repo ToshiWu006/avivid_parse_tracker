@@ -2,6 +2,8 @@ from db import DBhelper
 from basic import timing, logging_channels, to_datetime, curdate
 import pandas as pd
 from definitions import ROOT_DIR
+import datetime
+from log_utils import slackBot
 
 @timing
 def fetch_coupon_activity_all():
@@ -485,8 +487,29 @@ def fetch_ROAS_by_daily(coupon_id_list):
     columns = ['web_id', 'id', 'coupon_impression', 'coupon_accept', 'coupon_used', 'cost', 'revenue']
     df_ROAS = pd.DataFrame(data, columns=columns)
     return df_ROAS
+@logging_channels(['coupon_test'], save_local=True, ROOT_DIR=ROOT_DIR)
+def check_coupon_exception():
+    msg , exceptionIDSet = [], set()
+    for days in range(10, 0, -1):
+        query = f"""SELECT id, web_id FROM web_push.addfan_activity
+                    WHERE web_id!='rick' and ad_image_url = '_'  
+                    and activity_delete = 0 and coupon_enable = 1 and activity_enable = 1 
+                    and start_time < DATE_SUB(CURDATE(), INTERVAL {days} DAY) and end_time > curdate() 
+                    and coupon_used = 0;
+                    """
+        data = DBhelper("rhea1-db0", is_ssh=True).ExecuteSelect(query)
+        if len(data) > 0:
+            for i in data:
+                if i[0] not in exceptionIDSet:
+                    exceptionIDSet.add(i[0])
+                    msg.append(f"{i[1]}'s coupon id :{i[0]} hasn't been used for {days} days! Please check!")
+    if msg:
+        slackBot(["coupon_test"]).send_message('\n'.join([datetime.datetime.today().strftime('%Y-%m-%d')] + msg))
+
 
 if __name__ == "__main__":
+    if datetime.datetime.now().hour == 9:
+        check_coupon_exception()
     df_coupon = fetch_coupon_activity_running()
     coupon_id_list = list(df_coupon['id'])
     df_ROAS = fetch_ROAS_by_daily(coupon_id_list)
