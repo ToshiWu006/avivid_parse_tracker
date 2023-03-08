@@ -196,6 +196,7 @@ class TrackingParser:
         for data_dict in data_list:
             res.extend(cls.fully_parse_clickInfo(data_dict))
         df = pd.DataFrame(res)
+        ### error ### with case -> df == []
         df['date_time'] = [datetime.datetime.utcfromtimestamp(ts / 1000) + datetime.timedelta(hours=8) for ts in
                            df['timestamp']]
         return df
@@ -256,7 +257,7 @@ class TrackingParser:
         ## 1. parse common terms
         universial_dict = cls.parse_rename_universial(data_dict)
         ## 2. parse record_user terms
-        record_dict = cls.parse_rename_record_user(data_dict)
+        record_dict = cls.parse_rename_record_user(data_dict, event_type)
         ## 3. parse cart, remove_cart or purchase terms
         object_dict_list = cls.parse_rename_object(data_dict, dict_settings_all, event_type)
         result_dict_list = []
@@ -345,7 +346,7 @@ class TrackingParser:
         return universial_dict
 
     @staticmethod
-    def parse_rename_record_user(data_dict):
+    def parse_rename_record_user(data_dict, event_type = None):
         key_list = ['dv', 'ul', 'un', 'm_t', 's_h',
                     'w_ih', 't_p', 's_d', 's_d_', 'c_c',
                     'c_c_t', 't_nm', 't_ns', 't_nc', 'mt_nm',
@@ -368,6 +369,9 @@ class TrackingParser:
                            'max_time_no_click_last', 'max_scroll_depth_last', 'landing_count',
                            'is_addCart', 'is_removeCart', 'is_purchased_before']
         record_dict = {}
+        if event_type in ['purchase']:
+            key_list += ['l_u', 'l_p_u']
+            key_rename_list += ['landing_url', 'landing_url_last']
         if 'record_user' not in data_dict.keys():
             record_dict = {key:-1 for key in key_rename_list}
             return record_dict
@@ -849,11 +853,28 @@ if __name__ == "__main__":
     # data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": "onpage"})  # sendCoupon, acceptCoupon, discardCoupon
     #
 
+    TP = TrackingParser(web_id='inparents')
+    TP.dict_settings['purchase']
+    df = TrackingParser.get_df_click(date_utc8_start='2022-11-16', date_utc8_end='2022-11-16',
+                                    web_id='inparents', data_list=None, event_type='purchase')
+    data_list = filterListofDictByDict(data_list, dict_criteria={"event_type": event_type})
+    data_list = TrackingParser.get_data_by_date('2022-11-16')
+    data_list = filterListofDictByDict(data_list, dict_criteria={"web_id": 'inparents'})
+    data_list = filterListofDictByDict(data_list, dict_criteria={"event_type": 'purchase'})
 
-    df = TrackingParser.get_df_click(date_utc8_start='2022-10-13', date_utc8_end='2022-10-13',
-                                    web_id=None, data_list=None, event_type=None)
+    res = []
+    data_dict = data_list[0]
+    for data_dict in data_list:
+        print(data_dict.get('event_type'))
+        res.extend(TrackingParser.fully_parse_clickInfo(data_dict))
+
+    a = TrackingParser.get_df_click(data_list=data_list)
+    TrackingParser.get_df(web_id=web_id, event_type=event_type)
 
     query = DBhelper.generate_insertDup_SQLquery(df, 'clean_event_clickInfo', df.columns)
+
+
+
     DBhelper('tracker').ExecuteUpdate(query, df.to_dict('records'))
     # res = []
     # for data_dict in data_list_filter:
@@ -913,3 +934,196 @@ if __name__ == "__main__":
     #                                      'purchase')
     #
     #
+    def get_df(cls, date_utc8_start='2022-01-01', date_utc8_end='2022-01-01',
+                    web_id=None, data_list=None,
+                    event_type='load', dict_settings_all=None):
+        """
+
+        Parameters
+        ----------
+        date_utc8_start   : str, only use in data_list=None
+        date_utc8_end     : str, only use in data_list=None
+        web_id
+        data_list         : list of dict which to be appended
+        event_type        : load, leave, addCart, removeCart, purchase,
+                            sendCoupon, acceptCoupon, discardCoupon, enterCoupon, acceptAf
+        dict_settings_all : settings of all web_id for addCar, removeCar and purchase events
+
+        Returns
+        -------
+        DataFrame, df of all web_id
+        """
+        date_utc8_start, date_utc8_end = '2022-11-16', '2022-11-16'
+        if data_list==None:
+            data_list = TrackingParser.get_data_by_daterange(date_utc8_start, date_utc8_end)
+
+        if web_id:
+            data_list_filter = filterListofDictByDict(data_list,
+                                                      dict_criteria={"web_id":web_id, "event_type": event_type})
+        else:
+            data_list_filter = filterListofDictByDict(data_list, dict_criteria={"event_type": event_type})
+
+        dict_list = []
+        if event_type=='load':
+            for data_dict in data_list_filter:
+                dict_list += cls.fully_parse_loaded(data_dict)
+        elif event_type=='leave' or event_type=='timeout':
+            for data_dict in data_list_filter:
+                dict_list += cls.fully_parse_leaved_timeout(data_dict)
+        ## addCart, removeCart, purchase
+        # else:
+        elif event_type=='addCart' or event_type=='removeCart' or event_type=='purchase':
+            if dict_settings_all == None:
+                dict_settings_all = TrackingParser.fetch_parse_key_all_settings()
+            for data_dict in data_list_filter:
+                dict_list += TrackingParser.fully_parse_object_all(data_dict, event_type, dict_settings_all)
+        ## sendCoupon, acceptCoupon, discardCoupon
+        elif event_type in ['sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon']:
+        # elif event_type=='sendCoupon' or event_type=='acceptCoupon' or event_type=='discardCoupon':
+            for data_dict in data_list_filter:
+                dict_list += cls.fully_parse_coupon(data_dict, event_type)
+        elif event_type=='acceptAf':
+            for data_dict in data_list_filter:
+                dict_list += cls.fully_parse_afad(data_dict, event_type)
+        else:
+            print("not a valid event")
+            return pd.DataFrame()  ## early return
+        # self.data_list_clean = dict_list
+        if dict_list == []:
+            return pd.DataFrame() ## early return
+        else:
+            df = pd.DataFrame(dict_list)
+        df['date_time'] = [datetime.datetime.utcfromtimestamp(ts/1000)+datetime.timedelta(hours=8) for ts in df['timestamp']]
+        ## modify data case by case
+        if event_type=='purchase': ## unique key in table
+            df.drop(columns=cls._get_drop_col('purchase'), inplace=True)
+            cls.reformat_remove_str2num(df, col='product_price', inplace=True, reformat_value=-1)
+            cls.reformat_remove_str2num(df, col='total_price', inplace=True, reformat_value=-1)
+            cls.reformat_remove_str2num(df, col='shipping_price', inplace=True, reformat_value=-1)
+        elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout' or event_type=='acceptCoupon' or event_type=='discardCoupon':
+            # print([type(data) for data in df['max_time_no_scroll_array']])
+            df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) if type(data)==list else str(data) for data in df['max_time_no_scroll_array']]
+            df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) if type(data)==list else str(data) for data in df['max_time_no_scroll_depth_array']]
+        elif event_type=='sendCoupon':
+            df.drop(columns=cls._get_drop_col('sendCoupon'), inplace=True)
+            df['model_keys'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_keys']]
+            df['model_parameters'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_parameters']]
+            df['model_X'] = [','.join([str(i) for i in data]) if type(data)==list else '_' for data in df['model_X']]
+        elif event_type=='enterCoupon':
+            df = df.query(f"coupon_code!=''")
+        # df.drop_duplicates(subset=self._get_unique_col(event_type), inplace=True)
+        df.dropna(inplace=True)
+        df = cls.clean_before_sql(df, criteria_len={'web_id': 45, 'uuid': 36, 'ga_id': 45, 'fb_id': 45, 'timestamp': 16})
+        return df
+
+        data_dict = data_list_filter[0]
+        universial_dict = TrackingParser.parse_rename_universial(data_dict)
+        ## 2. parse record_user terms
+        record_dict = TrackingParser.parse_rename_record_user(data_dict)
+        ## 3. parse cart, remove_cart or purchase terms
+        d = dict_settings_all['inparents']['purchase']
+        for a, b in zip(d[0], d[1]):
+            print(f'{b:>22s} : {a}')
+        object_dict_list = TrackingParser.parse_rename_object(data_dict, dict_settings_all, event_type)
+        result_dict_list = []
+        for object_dict in object_dict_list:
+            if 'product_id' not in object_dict or str(object_dict['product_id']).startswith('hitobp:product'):
+                # remove useless in hito
+                continue
+            object_dict['product_id'] = str(object_dict['product_id'])
+            if object_dict['product_id'].startswith('pufii:product'):
+                object_dict['product_id'] = object_dict['product_id'][14:]
+                if object_dict['product_id'][0] == 'p': object_dict['product_id'] = object_dict['product_id'].replace(
+                    'p', 'P', 1)
+            elif object_dict['product_id'].startswith('wstyle:product'):
+                object_dict['product_id'] = object_dict['product_id'][15:]
+            object_dict.update(universial_dict)
+            object_dict.update(record_dict)
+            result_dict_list += [object_dict]
+        return result_dict_list
+
+
+        dict_object_key = {'addCart': 'cart', 'removeCart': 'remove_cart', 'purchase': 'purchase'}
+
+        object_key = dict_object_key[event_type]
+        if 'web_id' not in data_dict.keys():
+            print(f"web_id not in dict (not a valid format), return []")
+            return []
+        web_id = data_dict['web_id']
+        if web_id not in dict_settings_all.keys():
+            print(f"{web_id} not in dict_settings_all( do not analyze), return []")
+            return []
+        key_join_list, key_rename_list = dict_settings_all[web_id][event_type]
+        if object_key not in data_dict.keys():
+            print(f"{object_key} not in {data_dict}, return []")
+            return []
+        collection_dict, dict_object = {}, json.loads(data_dict[object_key])
+        if len(key_join_list[0].split('.')) > 1:
+            ## for dealing with adding 'purchase' key in purchase (91app, lovingfamily)
+            if key_join_list[0].split('.')[0] not in dict_object.keys():
+                dict_object = list(dict_object.values())[0]
+        else:
+            if key_join_list[0].split('.')[0] not in dict_object.keys():
+                print(f"{key_join_list[0].split('.')[0]} not in {dict_object}, return []")
+                return []
+        ## skip dict_object is not dict
+        if type(dict_object) != dict:
+            return []
+        value_list = []
+        n_list = 0
+        # print(dict_object)
+        ## parse dict type key and store list type key
+        a = list(zip(key_join_list, key_rename_list))
+        key, key_rename = a[5]
+        for key, key_rename in zip(key_join_list, key_rename_list):
+            key_list = key.split('.')
+            value = ''
+            if len(key_list) == 1:  ##directly access dict
+                for k in key_list:  ## append -1 if key not found
+                    temp = dict_object[k] if k in dict_object.keys() else -1
+                    if type(temp) == str or type(temp) == int:
+                        collection_dict.update({key_rename: temp})
+                    elif temp is None:
+                        collection_dict.update({key_rename: -1})
+                    elif type(temp) == list:
+                        value_list = temp
+                        n_list = len(temp)
+                # for k in key_list: ## append -1 if key not found
+                #     collection_dict.update({key_rename: dict_object[k]}) if k in dict_object.keys() else collection_dict.update({key_rename: -1})
+            else:  ## parse multiple layer
+                for key_2nd in key_list:
+                    if value == '':  ## 1st level
+                        value = '_' if key_2nd == 'empty' or key_2nd not in dict_object.keys() or not dict_object[
+                            key_2nd] else dict_object[key_2nd]
+                    elif key_2nd == 'json':  ## use json.loads() => i3fresh case
+                        value = json.loads(value)
+                    elif type(value) == dict:  ## 2nd, 3rd... level
+                        value = '_' if key_2nd == 'empty' or not value[key_2nd] else value[key_2nd]
+                        collection_dict.update({key_rename: value})
+                    elif type(value) == list:  ## 2nd, 3rd... level(parse list)
+                        n_list = len(value)
+                        for v in value:  ## value: list [{k21:v21, k22:v22, k23:v23,...}]
+                            if key_2nd in v.keys():
+                                value = '_' if key == 'empty' or not v[key_2nd] else v[key_2nd]
+                            else:  ## not in k21,k22,k23...
+                                value = '_'
+                            value_list += [value]
+                    else:
+                        print(f'do nothing in {dict_object}')
+        ## for parse multiple objects in a main_object
+        if value_list == []:
+            collection_purchase_dict_list = [collection_dict]
+        else:
+            # create multiple purchase record
+            n_dict_key = len(collection_dict.keys())
+            n_dict_list_key = int(len(value_list) / n_list)
+            collection_purchase_dict_list = []
+            if n_list != 0:
+                for i in range(n_list):
+                    temp_dict = {}
+                    for j in range(n_dict_list_key):
+                        temp_dict.update({key_rename_list[n_dict_key + j]: value_list[n_list * j + i]})
+                    temp_dict.update(collection_dict)
+                    collection_purchase_dict_list += [temp_dict]
+            else:
+                collection_purchase_dict_list = [collection_dict]
