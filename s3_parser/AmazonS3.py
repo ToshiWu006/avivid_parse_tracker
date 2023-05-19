@@ -152,11 +152,13 @@ class AmazonS3 :
         """ Reading the S3 object from bucket """
         try :
             data_decode =  self._bucket.Object(key=key).get()["Body"].read().decode().replace('}{','},{')
-            subDict = {r'}("landing")+{': '},{',
-                       r'^("landing")+{': '{',
-                       r'}("landing")+$': '}'}
-            for k, v in subDict.items():
-                data_decode = re.sub(k, v, data_decode)
+            subString = ['"landing"', '"]"']
+            for s in subString:
+                subDict = {rf'}}({s})+{{': '},{',
+                           rf'^({s})+{{': '{',
+                           rf'}}({s})+$': '}'}
+                for k, v in subDict.items():
+                    data_decode = re.sub(k, v, data_decode)
             return '['+data_decode+']'
         except :
             return '[]'
