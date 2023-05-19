@@ -9,14 +9,14 @@ import numpy as np
 class TrackingParser:
     def __init__(self, web_id=None, date_utc8_start=None, date_utc8_end=None):
         self.web_id = web_id
-        self.event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart',
-                                'purchase', 'sendCoupon', 'acceptCoupon', 'discardCoupon',
-                                'enterCoupon', 'acceptAf']
-        self.dict_object_key = {"load":"load", "leave":"", "timeout":"",
-                                "addCart":"cart", "removeCart":"remove_cart", "purchase":"purchase",
-                                "sendCoupon":"coupon_info", "acceptCoupon":"coupon_info",
-                                "discardCoupon":"coupon_info", "enterCoupon":"coupon_info",
-                                "acceptAf":"adaf_info"}
+        self.event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
+                                'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon',
+                                'sendAfAd', 'acceptAf', 'acceptAd']
+        self.dict_object_key = {"load": "load", "leave": "", "timeout": "",
+                                "addCart": "cart", "removeCart": "remove_cart", "purchase": "purchase",
+                                "sendCoupon": "coupon_info", "acceptCoupon": "coupon_info",
+                                "discardCoupon": "coupon_info", "enterCoupon": "coupon_info",
+                                "sendAfAd": "afad_info", "acceptAf": "afad_info", "acceptAd": "afad_info"}
         self.dict_settings = self.fetch_parse_key_settings(web_id)
         self.dict_settings_all = None
         # self.dict_settings_all = self.fetch_parse_key_all_settings()
@@ -114,7 +114,7 @@ class TrackingParser:
         # elif event_type=='sendCoupon' or event_type=='acceptCoupon' or event_type=='discardCoupon':
             for data_dict in data_list_filter:
                 dict_list += cls.fully_parse_coupon(data_dict, event_type)
-        elif event_type=='acceptAf':
+        elif event_type in ['sendAfAd', 'acceptAf', 'acceptAd']:
             for data_dict in data_list_filter:
                 dict_list += cls.fully_parse_afad(data_dict, event_type)
         else:
@@ -132,7 +132,9 @@ class TrackingParser:
             cls.reformat_remove_str2num(df, col='product_price', inplace=True, reformat_value=-1)
             cls.reformat_remove_str2num(df, col='total_price', inplace=True, reformat_value=-1)
             cls.reformat_remove_str2num(df, col='shipping_price', inplace=True, reformat_value=-1)
-        elif event_type=='addCart' or event_type=='removeCart' or event_type=='leave' or event_type=='timeout' or event_type=='acceptCoupon' or event_type=='discardCoupon':
+        elif event_type in ['addCart', 'removeCart', 'leave', 'timeout',
+                            'acceptCoupon', 'discardCoupon',
+                            'sendAfAd', 'acceptAf', 'acceptAd']:
             # print([type(data) for data in df['max_time_no_scroll_array']])
             df['max_time_no_scroll_array'] = [','.join([str(i) for i in data]) if type(data)==list else str(data) for data in df['max_time_no_scroll_array']]
             df['max_time_no_scroll_depth_array'] = [','.join([str(i) for i in data]) if type(data)==list else str(data) for data in df['max_time_no_scroll_depth_array']]
@@ -368,7 +370,7 @@ class TrackingParser:
                            'is_addCart', 'is_removeCart', 'is_purchased_before']
         record_dict = {}
         if event_type in ['purchase']:
-            key_list += ['l_u', 'l_p_u']
+            key_list += ['l_un', 'l_ul']
             key_rename_list += ['landing_url', 'landing_url_last']
         if 'record_user' not in data_dict.keys():
             record_dict = {key:-1 for key in key_rename_list}
@@ -505,7 +507,7 @@ class TrackingParser:
             print(f"'afad_info' not in {data_dict}, return []")
             return []
         dict_object = data_dict['afad_info']
-        if event_type=='acceptAf':
+        if event_type in ['sendAfAd', 'acceptAf', 'acceptAd']:
             key_list = ['l_b', 'p_p', 'a_i', 'w_t']
             key_rename_list = ['lower_bound', 'prob_purchase', 'ad_id', 'website_type']
         afad_info_dict = {}

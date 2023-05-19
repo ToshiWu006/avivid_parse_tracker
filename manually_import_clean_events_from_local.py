@@ -29,8 +29,9 @@ if __name__ == "__main__":
         # tracking = TrackingParser(web_id, date_utc8, date_utc8)
     num_days = (to_datetime(date_end) - to_datetime(date_start)).days+1
     date_list = date_range(date_start, num_days=num_days)
-    event_type_list = ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
-                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon', 'acceptAf']
+    event_type_list = event_type.split(',') if event_type else ['load', 'leave', 'timeout', 'addCart', 'removeCart', 'purchase',
+                                                       'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon',
+                                                       'sendAfAd', 'acceptAf', 'acceptAd']
     for date in date_list:
         ## enter web_id and event_type
         if web_id and event_type:
