@@ -227,4 +227,4 @@ if __name__ == "__main__":
     ## statistics
     df_stat_all, df_coupon_stat_all = update_statistics_table(date_utc8)
     ## delete folder at today_utc0-n
-    delete_expired_folder(14)
+    delete_expired_folder(3)
