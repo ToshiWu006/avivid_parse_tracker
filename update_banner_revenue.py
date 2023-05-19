@@ -93,8 +93,14 @@ if __name__ == "__main__":
         date_time = datetime.datetime.utcnow() + datetime.timedelta(hours=8-1)
         date, hour = datetime.datetime.strftime(date_time, "%Y-%m-%d"), datetime.datetime.strftime(date_time, "%H")
         print(f"no date and hour input, use last one hour: {date} {hour}")
+        df, df_purchase = prepare_segment_revenues(date, hour, is_save=is_save)
+    elif not hour:
+        print(f"no hour, use 24 hours at: {date}")
+        for hour in range(0, 24):
+            df, df_purchase = prepare_segment_revenues(date, hour, is_save=is_save)
     elif not date or not hour:
         print("Please input both date and hour")
         exit()
-    df, df_purchase = prepare_segment_revenues(date, hour, is_save=is_save)
+    else:
+        df, df_purchase = prepare_segment_revenues(date, hour, is_save=is_save)
     # df, df_purchase = prepare_segment_revenues(date, 10, is_save=is_save)

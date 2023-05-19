@@ -1,7 +1,7 @@
 from s3_parser import TrackingParser
 from db import DBhelper
 from basic import date_range, to_datetime
-from import_tracker_data_byHour import save_clean_events
+from import_tracker_data_byHour import save_clean_events, save_tracker_statistics, get_tracker_statistics_all, get_coupon_events_statistics
 import datetime, argparse
 
 
@@ -16,7 +16,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     web_id = args.web_id
-    date_start, date_end = args.date1_UTC8, args.date2_UTC8
+    date_start = '-'.join('0' + i if len(i) == 1 else i for i in args.date1_UTC8.split('-'))
+    date_end = args.date2_UTC8 if args.date2_UTC8 else date_start
     event_type = args.event_type
     print(f"import events form local, web_id: {web_id} and date from '{date_start}' to '{date_end}'")
 
@@ -33,23 +34,10 @@ if __name__ == "__main__":
                                                        'sendCoupon', 'acceptCoupon', 'discardCoupon', 'enterCoupon',
                                                        'sendAfAd', 'acceptAf', 'acceptAd']
     for date in date_list:
+        print(f"date: {date}, input web_id: {web_id} and event_type: {event_type}")
         ## enter web_id and event_type
-        if web_id and event_type:
-            print(f"date: {date}, input web_id: {web_id} and event_type: {event_type}")
-            event_type_list = [event_type]
-            df_list = TrackingParser.get_multiple_df(event_type_list, date, date, web_id)
-        ## enter web_id only, get all events
-        elif web_id and not event_type:
-            print(f"date: {date}, input web_id: {web_id} only and event_type: {event_type}")
-            df_list = TrackingParser.get_multiple_df(event_type_list, date, date, web_id)
-        ## enter event_type only
-        elif not web_id and event_type:
-            print(f"date: {date}, input web_id: {web_id} and event_type: {event_type} only")
-            event_type_list = [event_type]
-            df_list = TrackingParser.get_multiple_df(event_type_list, date, date)
-        ## both are not entered, get all events and all web_id
-        else:
-            print(f"date: {date}, not input web_id: {web_id} and event_type: {event_type}")
-            df_list = TrackingParser.get_multiple_df(event_type_list, date, date)
+        df_list = TrackingParser.get_multiple_df(event_type_list, date, date, web_id)
         save_clean_events(*df_list, event_type_list=event_type_list)
-
+        if not event_type:
+            save_tracker_statistics(get_tracker_statistics_all(date, *df_list[:6]))
+            save_tracker_statistics(get_coupon_events_statistics(date, *df_list[6:9]))

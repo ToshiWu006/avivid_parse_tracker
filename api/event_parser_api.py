@@ -1,4 +1,6 @@
 import os.path
+import sys
+sys.path.append(os.path.abspath('./'))
 from fastapi import FastAPI
 from definitions import ROOT_DIR
 import uvicorn, datetime
