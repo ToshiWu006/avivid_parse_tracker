@@ -217,7 +217,7 @@ class DBhelper:
             path = os.path.join(ROOT_DIR, "db", "settings.json")
         with open(path) as config_file:
             config = json.load(config_file)
-            return config
+        return config
 
     def get_session(self):
         return self.session
